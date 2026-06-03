@@ -149,6 +149,7 @@ activemq-data/
 
 # Environments
 .env
+.env.panel
 .envrc
 .venv
 env/
@@ -216,3 +217,31 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Build artifacts and dependency caches
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+build/
+.vite/
+coverage/
+.coverage
+htmlcov/
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+.cache/
+
+# Minecraft runtime data
+data/
+mods/
+config/
+*.mca
+*.dat
+*.dat_old
+*.jar
+*.log
+*.log.gz

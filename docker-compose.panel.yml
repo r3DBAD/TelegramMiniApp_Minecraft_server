@@ -1,0 +1,40 @@
+services:
+  panel-api:
+    build:
+      context: ./backend
+    container_name: minecraft-panel-api
+    restart: unless-stopped
+    env_file:
+      - ./.env.panel
+    environment:
+      RCON_HOST: minecraft
+      RCON_PORT: ${RCON_PORT:-25575}
+    ports:
+      - "${PANEL_API_PORT:-8000}:8000"
+    volumes:
+      - ./data:/minecraft-data:ro
+    depends_on:
+      - minecraft
+
+  panel-bot:
+    build:
+      context: ./backend
+    container_name: minecraft-panel-bot
+    restart: unless-stopped
+    command: ["python", "-m", "bot.main"]
+    env_file:
+      - ./.env.panel
+    depends_on:
+      - panel-api
+
+  panel-web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    container_name: minecraft-panel-web
+    restart: unless-stopped
+    ports:
+      - "${PANEL_WEB_PORT:-8080}:80"
+    depends_on:
+      - panel-api
