@@ -1,0 +1,56 @@
+export type MeResponse = {
+  user: {
+    id: number;
+    telegramUserId: number;
+    username?: string;
+    firstName?: string;
+    status: "pending" | "active" | "blocked";
+    minecraftUsername?: string;
+  };
+  roles: string[];
+  permissions: string[];
+};
+
+export type ServerStatus = {
+  online: boolean;
+  playersOnline: number | null;
+  maxPlayers: number | null;
+  players: string[];
+  raw: string;
+  error?: string;
+};
+
+export type CommandDef = {
+  key: string;
+  title: string;
+  description?: string;
+  permissionKey: string;
+  paramsSchema: Record<string, CommandParam>;
+  riskLevel: "low" | "medium" | "high" | "critical";
+  confirmationRequired: boolean;
+  allowed: boolean;
+};
+
+export type CommandParam =
+  | { type: "string"; minLength?: number; maxLength?: number; default?: string }
+  | { type: "minecraft_username"; default?: string }
+  | { type: "own_minecraft_username" }
+  | { type: "enum"; values: string[]; default?: string };
+
+export type UserListItem = {
+  id: number;
+  telegram_user_id: number;
+  telegram_username?: string;
+  first_name?: string;
+  status: string;
+  minecraft_username?: string;
+  requested_minecraft_username?: string;
+  roles: string[];
+};
+
+export type PermissionDef = {
+  key: string;
+  category: string;
+  description: string;
+  risk_level: "low" | "medium" | "high" | "critical";
+};
