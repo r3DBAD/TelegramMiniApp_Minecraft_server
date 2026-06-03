@@ -12,6 +12,8 @@
 - Точечные права поверх ролей, например только `minecraft.command.tp.player_to_player`.
 - Привязка Telegram-пользователя к Minecraft-нику.
 - Online/offline статус игроков по RCON `list`.
+- Одобрение и отклонение заявок игроков из вкладки `Настройки`.
+- Dropdown игроков для teleport-команд, если игроки онлайн.
 - Whitelist, kick, ban, pardon, tp, gamemode, time, weather, save.
 - Аудит действий в Postgres.
 - HTTPS для `panel.r3dbad.ru` через Caddy и Let's Encrypt.
@@ -44,7 +46,7 @@ Minecraft RCON
 
 ## Стек
 
-- Backend: Python, FastAPI, asyncpg, aiogram, mcrcon.
+- Backend: Python, FastAPI, asyncpg, aiogram, built-in RCON client.
 - Frontend: React, TypeScript, Vite, lucide-react.
 - Database: Postgres, отдельная схема `mc_panel`.
 - HTTPS: Caddy.
@@ -85,6 +87,10 @@ docker-compose.https.yml  Caddy HTTPS
 ## Быстрый запуск на сервере
 
 Команды выполняются из папки проекта на сервере, где уже находится текущий `docker-compose.yml` Minecraft-сервера.
+
+Для временного теста без домена и Caddy можно использовать Cloudflare Quick Tunnel: [docs/cloudflared-test.md](docs/cloudflared-test.md).
+
+Для локальной разработки без Docker панели: [docs/local-uvicorn-cloudflared.md](docs/local-uvicorn-cloudflared.md).
 
 ### 1. Настроить DNS
 
@@ -205,6 +211,17 @@ https://panel.r3dbad.ru/api/healthz
 ```
 
 Если owner назначен правильно, бот покажет кнопку Mini App.
+
+Команды бота:
+
+```text
+/start   открыть Mini App
+/panel   получить кнопку панели
+/status  статус Minecraft
+/players игроки онлайн
+/id      показать Telegram ID
+/help    список команд
+```
 
 ## Права
 

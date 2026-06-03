@@ -3,10 +3,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 
+from app.config import get_settings
 from app.security.dependencies import require_permission
 from app.security.permissions import CurrentUser
 from app.services.minecraft import parse_list_response
-from app.config import get_settings
+from app.services.rcon import RconError
 
 router = APIRouter()
 
@@ -16,7 +17,11 @@ async def status(
     request: Request,
     _: CurrentUser = Depends(require_permission("minecraft.status.view")),
 ) -> dict:
-    response = await request.app.state.rcon.command("list")
+    try:
+        response = await request.app.state.rcon.command("list")
+    except (RconError, OSError, TimeoutError) as exc:
+        return _offline_status(str(exc))
+
     parsed = parse_list_response(response)
     return {
         "online": True,
@@ -32,7 +37,11 @@ async def players(
     request: Request,
     _: CurrentUser = Depends(require_permission("minecraft.players.view")),
 ) -> dict:
-    response = await request.app.state.rcon.command("list")
+    try:
+        response = await request.app.state.rcon.command("list")
+    except (RconError, OSError, TimeoutError) as exc:
+        return {"players": [], "online": 0, "max": None, "error": str(exc)}
+
     parsed = parse_list_response(response)
     return {"players": parsed["players"], "online": parsed["online"], "max": parsed["max"]}
 
@@ -42,7 +51,10 @@ async def whitelist(
     request: Request,
     _: CurrentUser = Depends(require_permission("minecraft.whitelist.read")),
 ) -> dict:
-    response = await request.app.state.rcon.command("whitelist list")
+    try:
+        response = await request.app.state.rcon.command("whitelist list")
+    except (RconError, OSError, TimeoutError) as exc:
+        response = f"RCON unavailable: {exc}"
     return {"raw": response, "file": _read_json_file("whitelist.json")}
 
 
@@ -62,3 +74,14 @@ def _read_json_file(name: str):
             return json.load(file)
     except json.JSONDecodeError:
         return []
+
+
+def _offline_status(error: str) -> dict:
+    return {
+        "online": False,
+        "playersOnline": 0,
+        "maxPlayers": None,
+        "players": [],
+        "raw": "",
+        "error": error,
+    }

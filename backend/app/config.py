@@ -17,7 +17,11 @@ class Settings(BaseSettings):
     init_data_max_age_seconds: int = Field(default=86400, alias="INIT_DATA_MAX_AGE_SECONDS")
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+    model_config = SettingsConfigDict(
+        env_file=(".env.panel", ".env"),
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

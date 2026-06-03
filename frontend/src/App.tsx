@@ -13,7 +13,8 @@ import {
   UserCog,
   Users,
   Wifi,
-  WifiOff
+  WifiOff,
+  XCircle
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -133,7 +134,7 @@ export default function App() {
         </button>
         {can.has("users.manage") && (
           <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>
-            <Users size={17} /> Доступ
+            <UserCog size={17} /> Настройки
           </button>
         )}
       </nav>
@@ -143,7 +144,7 @@ export default function App() {
       )}
 
       {tab === "commands" && (
-        <Commands commands={commands} onOutput={setOutput} />
+        <Commands commands={commands} onlinePlayers={status?.players || []} onOutput={setOutput} />
       )}
 
       {tab === "users" && can.has("users.manage") && (
@@ -170,7 +171,9 @@ function Overview({ me, status, output }: { me: MeResponse | null; status: Serve
     <section className="grid">
       <div className="metric">
         <span>Сервер</span>
-        <strong>{status?.online ? "Online" : "Unknown"}</strong>
+        <strong className={status?.online ? "online-text" : "offline-text"}>
+          {status?.online ? "Online" : "RCON offline"}
+        </strong>
       </div>
       <div className="metric">
         <span>Игроки онлайн</span>
@@ -192,6 +195,7 @@ function Overview({ me, status, output }: { me: MeResponse | null; status: Serve
       </div>
       <div className="panel wide">
         <h2><Users size={18} /> Онлайн</h2>
+        {status?.error && <p className="panel-error">RCON: {status.error}</p>}
         <div className="chips">
           {(status?.players || []).map((player) => <span key={player}>{player}</span>)}
           {status?.players.length === 0 && <span>Пусто</span>}
@@ -233,7 +237,15 @@ function AccessRequestForm() {
   );
 }
 
-function Commands({ commands, onOutput }: { commands: CommandDef[]; onOutput: (text: string) => void }) {
+function Commands({
+  commands,
+  onlinePlayers,
+  onOutput
+}: {
+  commands: CommandDef[];
+  onlinePlayers: string[];
+  onOutput: (text: string) => void;
+}) {
   const [values, setValues] = useState<Record<string, Record<string, string>>>({});
   const [running, setRunning] = useState<string | null>(null);
   const available = commands.filter((command) => command.allowed).length;
@@ -241,11 +253,12 @@ function Commands({ commands, onOutput }: { commands: CommandDef[]; onOutput: (t
   async function execute(command: CommandDef) {
     if (!command.allowed) return;
     if (command.confirmationRequired && !confirm(`${command.title}?`)) return;
+    const params = buildCommandParams(command, values[command.key] || {}, onlinePlayers);
     setRunning(command.key);
     try {
       const result = await api<{ output: string }>(`/commands/${command.key}/execute`, {
         method: "POST",
-        body: JSON.stringify({ params: values[command.key] || {}, confirmed: true })
+        body: JSON.stringify({ params, confirmed: true })
       });
       onOutput(result.output || "OK");
     } catch (err) {
@@ -282,6 +295,20 @@ function Commands({ commands, onOutput }: { commands: CommandDef[]; onOutput: (t
             <div className={fieldCount > 0 ? "command-fields" : "command-fields empty"}>
               {Object.entries(command.paramsSchema).map(([name, param]) => {
                 if (param.type === "own_minecraft_username") return null;
+                if (param.type === "minecraft_username" && onlinePlayers.length > 0) {
+                  return (
+                    <select
+                      key={name}
+                      aria-label={name}
+                      value={values[command.key]?.[name] || onlinePlayers[0]}
+                      onChange={(event) => setCommandValue(setValues, command.key, name, event.target.value)}
+                    >
+                      {onlinePlayers.map((player) => (
+                        <option key={player} value={player}>{name}: {player}</option>
+                      ))}
+                    </select>
+                  );
+                }
                 if (param.type === "enum") {
                   return (
                     <select
@@ -305,6 +332,9 @@ function Commands({ commands, onOutput }: { commands: CommandDef[]; onOutput: (t
                 );
               })}
               {fieldCount === 0 && <span>Параметры не нужны</span>}
+              {fieldCount > 0 && onlinePlayers.length === 0 && command.key.startsWith("tp.") && (
+                <span>Нет игроков онлайн</span>
+              )}
             </div>
             <button
               className="run-button"
@@ -335,7 +365,10 @@ function UsersPage({
 }) {
   const [selectedPermission, setSelectedPermission] = useState<Record<number, string>>({});
   const [minecraftNames, setMinecraftNames] = useState<Record<number, string>>({});
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(users[0]?.id ?? null);
   const commandPermissions = permissions.filter((permission) => permission.category === "command");
+  const selectedUser = users.find((user) => user.id === selectedUserId) || users[0];
+  const pendingCount = users.filter((user) => user.status === "pending").length;
 
   async function setStatus(user: UserListItem, status: string) {
     await api(`/users/${user.id}/status`, {
@@ -364,7 +397,12 @@ function UsersPage({
   }
 
   async function setMinecraftProfile(user: UserListItem) {
-    const username = (minecraftNames[user.id] || user.minecraft_username || "").trim();
+    const username = (
+      minecraftNames[user.id] ||
+      user.minecraft_username ||
+      user.requested_minecraft_username ||
+      ""
+    ).trim();
     if (!username) return;
     await api(`/users/${user.id}/minecraft-profile`, {
       method: "PUT",
@@ -377,65 +415,182 @@ function UsersPage({
     <section className="user-list">
       <div className="section-head">
         <div>
-          <p className="eyebrow">Telegram access</p>
-          <h2><Users size={18} /> Пользователи</h2>
+          <p className="eyebrow">Access control</p>
+          <h2><UserCog size={18} /> Настройки доступа</h2>
         </div>
-        <span>{users.length} всего</span>
+        <span>{users.length} всего · {pendingCount} заявок</span>
       </div>
-      {users.map((user) => {
-        const linkedMinecraftUsername = user.minecraft_username;
-        const isOnline = Boolean(
-          linkedMinecraftUsername &&
-            onlinePlayers.some((player) => sameMinecraftName(player, linkedMinecraftUsername))
-        );
+      <div className="settings-panel">
+        <label className="field-label">
+          Пользователь
+          <select
+            value={selectedUser?.id || ""}
+            onChange={(event) => setSelectedUserId(Number(event.target.value))}
+          >
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {userLabel(user)} · {statusLabel(user.status)}
+              </option>
+            ))}
+          </select>
+        </label>
 
-        return (
-          <article className="user-row" key={user.id}>
-            <div>
-              <h2>{user.first_name || user.telegram_username || user.telegram_user_id}</h2>
-              <p>{user.status} · {user.roles.join(", ") || "no role"}</p>
-              <div className="user-meta">
-                <span><Gamepad2 size={15} /> {user.minecraft_username || "Ник не привязан"}</span>
-                <span className={isOnline ? "status-pill online" : "status-pill offline"}>
-                  {isOnline ? <Wifi size={15} /> : <WifiOff size={15} />}
-                  {isOnline ? "Online" : "Offline"}
-                </span>
-              </div>
-            </div>
-            <div className="user-actions">
-              <div className="profile-link">
-                <input
-                  value={minecraftNames[user.id] ?? user.minecraft_username ?? user.requested_minecraft_username ?? ""}
-                  placeholder="Minecraft ник"
-                  onChange={(event) => setMinecraftNames((current) => ({ ...current, [user.id]: event.target.value }))}
-                />
-                <button onClick={() => setMinecraftProfile(user)}><Link size={16} /> Привязать</button>
-              </div>
-              <button onClick={() => setStatus(user, "active")}><CheckCircle2 size={16} /> Активировать</button>
-              {canManageRoles && (
-                <>
-                  <button onClick={() => grantRole(user, "player")}><Shield size={16} /> Player</button>
-                  <button onClick={() => grantRole(user, "moderator")}><Ban size={16} /> Moderator</button>
-                  <button onClick={() => grantRole(user, "admin")}><Crown size={16} /> Admin</button>
-                  <select
-                    value={selectedPermission[user.id] || ""}
-                    onChange={(event) => setSelectedPermission((current) => ({ ...current, [user.id]: event.target.value }))}
-                  >
-                    <option value="">Точное право</option>
-                    {commandPermissions.map((permission) => (
-                      <option key={permission.key} value={permission.key}>{permission.key}</option>
-                    ))}
-                  </select>
-                  <button onClick={() => setPermission(user, "allow")}>Разрешить</button>
-                  <button onClick={() => setPermission(user, "deny")}>Запретить</button>
-                </>
-              )}
-            </div>
-          </article>
-        );
-      })}
+        {selectedUser ? (
+          <SelectedUserSettings
+            user={selectedUser}
+            commandPermissions={commandPermissions}
+            canManageRoles={canManageRoles}
+            onlinePlayers={onlinePlayers}
+            minecraftName={minecraftNames[selectedUser.id] ?? selectedUser.minecraft_username ?? selectedUser.requested_minecraft_username ?? ""}
+            selectedPermission={selectedPermission[selectedUser.id] || ""}
+            setMinecraftName={(value) => setMinecraftNames((current) => ({ ...current, [selectedUser.id]: value }))}
+            setSelectedPermission={(value) => setSelectedPermission((current) => ({ ...current, [selectedUser.id]: value }))}
+            setStatus={setStatus}
+            grantRole={grantRole}
+            setPermission={setPermission}
+            setMinecraftProfile={setMinecraftProfile}
+          />
+        ) : (
+          <div className="notice">Пользователей пока нет.</div>
+        )}
+      </div>
     </section>
   );
+}
+
+function SelectedUserSettings({
+  user,
+  commandPermissions,
+  canManageRoles,
+  onlinePlayers,
+  minecraftName,
+  selectedPermission,
+  setMinecraftName,
+  setSelectedPermission,
+  setStatus,
+  grantRole,
+  setPermission,
+  setMinecraftProfile
+}: {
+  user: UserListItem;
+  commandPermissions: PermissionDef[];
+  canManageRoles: boolean;
+  onlinePlayers: string[];
+  minecraftName: string;
+  selectedPermission: string;
+  setMinecraftName: (value: string) => void;
+  setSelectedPermission: (value: string) => void;
+  setStatus: (user: UserListItem, status: string) => Promise<void>;
+  grantRole: (user: UserListItem, roleKey: string) => Promise<void>;
+  setPermission: (user: UserListItem, effect: "allow" | "deny") => Promise<void>;
+  setMinecraftProfile: (user: UserListItem) => Promise<void>;
+}) {
+  const isOnline = Boolean(
+    user.minecraft_username &&
+      onlinePlayers.some((player) => sameMinecraftName(player, user.minecraft_username!))
+  );
+
+  return (
+    <article className="settings-card">
+      <div className="settings-summary">
+        <div>
+          <p className="eyebrow">Selected user</p>
+          <h2>{userLabel(user)}</h2>
+          <p>{statusLabel(user.status)} · {user.roles.join(", ") || "no role"}</p>
+        </div>
+        <div className="user-meta">
+          <span><Gamepad2 size={15} /> {user.minecraft_username || user.requested_minecraft_username || "Ник не привязан"}</span>
+          <span className={isOnline ? "status-pill online" : "status-pill offline"}>
+            {isOnline ? <Wifi size={15} /> : <WifiOff size={15} />}
+            {isOnline ? "Online" : "Offline"}
+          </span>
+        </div>
+      </div>
+
+      <div className="settings-grid">
+        <label className="field-label wide-field">
+          Minecraft ник
+          <div className="profile-link">
+            <input
+              value={minecraftName}
+              placeholder="Minecraft ник"
+              onChange={(event) => setMinecraftName(event.target.value)}
+            />
+            <button onClick={() => setMinecraftProfile(user)}><Link size={16} /> Привязать</button>
+          </div>
+        </label>
+
+        <div className="settings-actions">
+          <button onClick={() => setStatus(user, "active")}><CheckCircle2 size={16} /> Активировать</button>
+          <button className="danger-button" onClick={() => setStatus(user, "blocked")}><XCircle size={16} /> Отклонить</button>
+        </div>
+
+        {canManageRoles && (
+          <>
+            <div className="settings-actions wide-field">
+              <button onClick={() => grantRole(user, "player")}><Shield size={16} /> Player</button>
+              <button onClick={() => grantRole(user, "moderator")}><Ban size={16} /> Moderator</button>
+              <button onClick={() => grantRole(user, "admin")}><Crown size={16} /> Admin</button>
+            </div>
+
+            <label className="field-label wide-field">
+              Точное право
+              <select
+                value={selectedPermission}
+                onChange={(event) => setSelectedPermission(event.target.value)}
+              >
+                <option value="">Выбрать permission</option>
+                {commandPermissions.map((permission) => (
+                  <option key={permission.key} value={permission.key}>{permission.key}</option>
+                ))}
+              </select>
+            </label>
+
+            <div className="settings-actions">
+              <button onClick={() => setPermission(user, "allow")}>Разрешить</button>
+              <button className="danger-button" onClick={() => setPermission(user, "deny")}>Запретить</button>
+            </div>
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function buildCommandParams(
+  command: CommandDef,
+  currentValues: Record<string, string>,
+  onlinePlayers: string[]
+): Record<string, string> {
+  const params: Record<string, string> = { ...currentValues };
+
+  for (const [name, param] of Object.entries(command.paramsSchema)) {
+    if (param.type === "own_minecraft_username") continue;
+    if (params[name]) continue;
+
+    if (param.type === "minecraft_username" && onlinePlayers[0]) {
+      params[name] = onlinePlayers[0];
+    }
+    if (param.type === "enum") {
+      params[name] = param.default || param.values[0];
+    }
+    if (param.type === "string" && param.default) {
+      params[name] = param.default;
+    }
+  }
+
+  return params;
+}
+
+function userLabel(user: UserListItem): string {
+  return user.first_name || user.telegram_username || String(user.telegram_user_id);
+}
+
+function statusLabel(status: string): string {
+  if (status === "active") return "Активен";
+  if (status === "pending") return "Заявка";
+  if (status === "blocked") return "Отклонен";
+  return status;
 }
 
 function sameMinecraftName(left: string, right: string): boolean {

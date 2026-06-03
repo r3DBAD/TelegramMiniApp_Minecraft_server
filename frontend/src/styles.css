@@ -265,6 +265,12 @@ h2 {
   margin-top: 14px;
 }
 
+.panel-error {
+  margin-top: 10px;
+  color: #ffd4d1;
+  overflow-wrap: anywhere;
+}
+
 .chips span {
   border: 1px solid rgba(88, 208, 111, 0.18);
   border-radius: 999px;
@@ -391,6 +397,64 @@ input::placeholder {
   grid-template-columns: minmax(220px, 1fr) minmax(280px, auto);
 }
 
+.settings-panel,
+.settings-card {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(16, 23, 19, 0.82);
+}
+
+.settings-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent),
+    var(--surface);
+}
+
+.settings-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(180px, 1fr);
+  gap: 10px;
+}
+
+.field-label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.wide-field {
+  grid-column: 1 / -1;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+.danger-button {
+  border-color: rgba(239, 96, 86, 0.42) !important;
+  background: rgba(239, 96, 86, 0.13) !important;
+}
+
 .user-actions {
   flex-wrap: wrap;
   gap: 8px;
@@ -491,8 +555,13 @@ input::placeholder {
 
   .grid,
   .command-row,
-  .user-row {
+  .user-row,
+  .settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-summary {
+    display: grid;
   }
 
   .tabs {
@@ -507,12 +576,17 @@ input::placeholder {
     justify-content: stretch;
   }
 
+  .settings-actions {
+    align-items: stretch;
+  }
+
   .profile-link {
     grid-template-columns: 1fr;
     width: 100%;
   }
 
   .user-actions button,
+  .settings-actions button,
   .run-button {
     width: 100%;
   }

@@ -26,46 +26,54 @@ async def get_current_user(
     )
     telegram_user = init_data.user
 
-    async with pool.acquire() as connection:
-        row = await connection.fetchrow(
-            """
-            INSERT INTO mc_panel.users (
-                telegram_user_id, telegram_username, first_name, last_name,
-                language_code, photo_url, status, last_seen_at
+    try:
+        async with pool.acquire() as connection:
+            row = await connection.fetchrow(
+                """
+                INSERT INTO mc_panel.users (
+                    telegram_user_id, telegram_username, first_name, last_name,
+                    language_code, photo_url, status, last_seen_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, 'pending', now())
+                ON CONFLICT (telegram_user_id) DO UPDATE SET
+                    telegram_username = EXCLUDED.telegram_username,
+                    first_name = EXCLUDED.first_name,
+                    last_name = EXCLUDED.last_name,
+                    language_code = EXCLUDED.language_code,
+                    photo_url = EXCLUDED.photo_url,
+                    last_seen_at = now()
+                RETURNING id, telegram_user_id, telegram_username, first_name, status
+                """,
+                telegram_user["id"],
+                telegram_user.get("username"),
+                telegram_user.get("first_name"),
+                telegram_user.get("last_name"),
+                telegram_user.get("language_code"),
+                telegram_user.get("photo_url"),
             )
-            VALUES ($1, $2, $3, $4, $5, $6, 'pending', now())
-            ON CONFLICT (telegram_user_id) DO UPDATE SET
-                telegram_username = EXCLUDED.telegram_username,
-                first_name = EXCLUDED.first_name,
-                last_name = EXCLUDED.last_name,
-                language_code = EXCLUDED.language_code,
-                photo_url = EXCLUDED.photo_url,
-                last_seen_at = now()
-            RETURNING id, telegram_user_id, telegram_username, first_name, status
-            """,
-            telegram_user["id"],
-            telegram_user.get("username"),
-            telegram_user.get("first_name"),
-            telegram_user.get("last_name"),
-            telegram_user.get("language_code"),
-            telegram_user.get("photo_url"),
-        )
 
-        if row["status"] == "blocked":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access blocked")
+            if row["status"] == "blocked":
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "Access blocked")
 
-        roles = await load_roles(connection, row["id"])
-        permissions = await load_effective_permissions(connection, row["id"])
-        profile = await connection.fetchrow(
-            """
-            SELECT username
-            FROM mc_panel.minecraft_profiles
-            WHERE user_id = $1 AND is_primary = true
-            ORDER BY id
-            LIMIT 1
-            """,
-            row["id"],
-        )
+            roles = await load_roles(connection, row["id"])
+            permissions = await load_effective_permissions(connection, row["id"])
+            profile = await connection.fetchrow(
+                """
+                SELECT username
+                FROM mc_panel.minecraft_profiles
+                WHERE user_id = $1 AND is_primary = true
+                ORDER BY id
+                LIMIT 1
+                """,
+                row["id"],
+            )
+    except HTTPException:
+        raise
+    except (asyncpg.PostgresError, OSError, TimeoutError) as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            f"Postgres unavailable: {exc}",
+        ) from exc
 
     request.state.telegram_init_data = init_data
     request.state.telegram_user_payload = json.dumps(telegram_user, ensure_ascii=False)

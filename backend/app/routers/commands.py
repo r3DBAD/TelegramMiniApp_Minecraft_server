@@ -8,6 +8,7 @@ from app.db import get_pool
 from app.security.dependencies import get_current_user, require_permission
 from app.security.permissions import CurrentUser
 from app.services.commands import render_command
+from app.services.rcon import RconError
 
 router = APIRouter()
 
@@ -117,7 +118,7 @@ async def execute_command(
 
     try:
         output = await request.app.state.rcon.command(rendered)
-    except Exception as exc:
+    except (RconError, OSError, TimeoutError) as exc:
         async with pool.acquire() as connection:
             await connection.execute(
                 """
@@ -128,7 +129,10 @@ async def execute_command(
                 execution_id,
                 str(exc),
             )
-        raise
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            f"RCON unavailable: {exc}",
+        ) from exc
 
     async with pool.acquire() as connection:
         await connection.execute(

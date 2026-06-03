@@ -90,6 +90,22 @@ async def update_user_status(
             user_id,
             body.status,
         )
+        if body.status in ("active", "blocked"):
+            await connection.execute(
+                """
+                UPDATE mc_panel.access_requests ar
+                SET status = $2,
+                    reviewed_by = $3,
+                    reviewed_at = now()
+                FROM mc_panel.users u
+                WHERE u.id = $1
+                  AND ar.telegram_user_id = u.telegram_user_id
+                  AND ar.status = 'pending'
+                """,
+                user_id,
+                "approved" if body.status == "active" else "rejected",
+                current_user.id,
+            )
         await _audit(connection, current_user.id, "users.status.update", "user", str(user_id), body.model_dump())
     if result.endswith("0"):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
