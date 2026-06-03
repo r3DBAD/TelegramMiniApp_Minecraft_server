@@ -225,6 +225,7 @@ frontend/dist/
 dist/
 build/
 .vite/
+*.tsbuildinfo
 coverage/
 .coverage
 htmlcov/
