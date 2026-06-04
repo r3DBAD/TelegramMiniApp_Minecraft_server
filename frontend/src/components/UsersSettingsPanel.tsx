@@ -23,7 +23,13 @@ export function UsersSettingsPanel({
   const [selectedPermission, setSelectedPermission] = useState<Record<number, string>>({});
   const [minecraftNames, setMinecraftNames] = useState<Record<number, string>>({});
   const [selectedUserId, setSelectedUserId] = useState<number | null>(users[0]?.id ?? null);
-  const visibleUsers = useMemo(() => users.filter((user) => user.status !== "blocked"), [users]);
+  const visibleUsers = useMemo(
+    () =>
+      users
+        .filter((user) => user.status !== "blocked")
+        .sort((left, right) => Number(right.status === "pending") - Number(left.status === "pending")),
+    [users]
+  );
   const commandPermissions = permissions.filter((permission) => permission.category === "command");
   const selectedUser = visibleUsers.find((user) => user.id === selectedUserId) || visibleUsers[0];
   const pendingCount = visibleUsers.filter((user) => user.status === "pending").length;
@@ -97,20 +103,23 @@ export function UsersSettingsPanel({
       </div>
 
       <div className="settings-panel">
-        <div className="user-picker">
-          <label className="field-label">
-            Пользователь
-            <select value={selectedUser?.id || ""} onChange={(event) => setSelectedUserId(Number(event.target.value))}>
-              {visibleUsers.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {userLabel(user)} · {statusLabel(user.status)}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="access-overview">
           <div className="settings-stats">
             <span>{pendingCount} заявок</span>
             <span>{visibleUsers.length - pendingCount} активных</span>
+          </div>
+          <div className="user-choice-list" aria-label="Пользователи">
+            {visibleUsers.map((user) => (
+              <button
+                className={user.id === selectedUser?.id ? "active" : ""}
+                key={user.id}
+                onClick={() => setSelectedUserId(user.id)}
+              >
+                <span className={`mini-status ${user.status}`} />
+                <strong>{userLabel(user)}</strong>
+                <small>{statusLabel(user.status)}</small>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -178,12 +187,12 @@ function SelectedUserSettings({
   const avatarText = name.slice(0, 2).toUpperCase();
 
   return (
-    <article className={`settings-card user-status-${user.status}`}>
+    <article className={`user-detail-card user-status-${user.status}`}>
       <div className="settings-summary">
         <div className="selected-user-title">
           <div className="user-avatar">{avatarText}</div>
           <div>
-            <p className="eyebrow">Пользователь</p>
+            <p className="eyebrow">{user.status === "pending" ? "Новая заявка" : "Пользователь"}</p>
             <h2>{name}</h2>
             <div className="user-badges">
               <span className={`status-dot ${user.status}`}>{statusLabel(user.status)}</span>
@@ -225,9 +234,15 @@ function SelectedUserSettings({
             Доступ
           </div>
           <div className="settings-actions two-columns">
-            <button className="primary-button" disabled={user.status === "active"} onClick={() => setStatus(user, "active")}>
-              <CheckCircle2 size={16} /> Активировать
-            </button>
+            {user.status === "pending" ? (
+              <button className="primary-button" onClick={() => setStatus(user, "active")}>
+                <CheckCircle2 size={16} /> Одобрить
+              </button>
+            ) : (
+              <button className="secondary-button" disabled>
+                <CheckCircle2 size={16} /> Активен
+              </button>
+            )}
             <button className="danger-button" onClick={() => setStatus(user, "blocked")}>
               <XCircle size={16} /> Отклонить
             </button>

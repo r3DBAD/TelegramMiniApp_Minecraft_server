@@ -1,6 +1,6 @@
-import { AlertTriangle, Command } from "lucide-react";
+import { AlertTriangle, Command, Lock, Play, Search } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { api } from "../lib/api";
 import { buildCommandParams, commandParamEntries, riskLabels } from "../lib/panel";
@@ -13,11 +13,31 @@ type CommandsPanelProps = {
 };
 
 type CommandValues = Record<string, Record<string, string>>;
+type RiskFilter = "all" | "safe" | "medium" | "danger";
 
 export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPanelProps) {
   const [values, setValues] = useState<CommandValues>({});
   const [running, setRunning] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const available = commands.filter((command) => command.allowed).length;
+  const filteredCommands = useMemo(
+    () =>
+      commands.filter((command) => {
+        if (!command.allowed) return false;
+
+        const haystack = `${command.title} ${command.description || ""} ${command.key}`.toLowerCase();
+        const matchesQuery = haystack.includes(query.trim().toLowerCase());
+        const matchesRisk =
+          riskFilter === "all" ||
+          (riskFilter === "safe" && command.riskLevel === "low") ||
+          (riskFilter === "medium" && command.riskLevel === "medium") ||
+          (riskFilter === "danger" && ["high", "critical"].includes(command.riskLevel));
+
+        return matchesQuery && matchesRisk;
+      }),
+    [commands, query, riskFilter]
+  );
 
   async function execute(command: CommandDef) {
     if (!command.allowed) return;
@@ -53,12 +73,27 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
         </span>
       </div>
 
-      {commands.map((command) => {
+      <div className="command-toolbar">
+        <label className="search-field">
+          <Search size={17} />
+          <input value={query} placeholder="Найти команду" onChange={(event) => setQuery(event.target.value)} />
+        </label>
+        <div className="filter-pills">
+          <button className={riskFilter === "all" ? "active" : ""} onClick={() => setRiskFilter("all")}>Все</button>
+          <button className={riskFilter === "safe" ? "active" : ""} onClick={() => setRiskFilter("safe")}>Обычные</button>
+          <button className={riskFilter === "medium" ? "active" : ""} onClick={() => setRiskFilter("medium")}>Средние</button>
+          <button className={riskFilter === "danger" ? "active" : ""} onClick={() => setRiskFilter("danger")}>Опасные</button>
+        </div>
+      </div>
+
+      {filteredCommands.map((command) => {
         const params = commandParamEntries(command);
         const fieldCount = params.filter(([, param]) => param.type !== "own_minecraft_username").length;
+        const needsOnlineSelect = params.some(([, param]) => param.type === "minecraft_username") && command.key.startsWith("tp.");
+        const canRun = command.allowed && !(needsOnlineSelect && onlinePlayers.length === 0);
 
         return (
-          <article className={`command-row risk-${command.riskLevel} ${!command.allowed ? "locked" : ""}`} key={command.key}>
+          <article className={`command-card risk-${command.riskLevel} ${!command.allowed ? "locked" : ""}`} key={command.key}>
             <div className="command-main">
               <div className="command-title">
                 <h2>{command.title}</h2>
@@ -89,6 +124,16 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
                     </select>
                   );
                 }
+                if (param.type === "minecraft_username") {
+                  return (
+                    <input
+                      key={name}
+                      aria-label={name}
+                      placeholder={name}
+                      onChange={(event) => setCommandValue(setValues, command.key, name, event.target.value)}
+                    />
+                  );
+                }
                 if (param.type === "enum") {
                   return (
                     <select
@@ -115,15 +160,23 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
                 );
               })}
               {fieldCount === 0 && <span>Параметры не нужны</span>}
-              {fieldCount > 0 && onlinePlayers.length === 0 && command.key.startsWith("tp.") && <span>Нет игроков онлайн</span>}
+              {needsOnlineSelect && onlinePlayers.length === 0 && <span className="field-hint">Нет игроков онлайн</span>}
             </div>
 
-            <button className="run-button" disabled={!command.allowed || running === command.key} onClick={() => execute(command)}>
-              {running === command.key ? "..." : command.allowed ? "Выполнить" : "Нет доступа"}
+            <button className="run-button" disabled={!canRun || running === command.key} onClick={() => execute(command)}>
+              {command.allowed ? <Play size={17} /> : <Lock size={17} />}
+              {running === command.key ? "Выполняю" : command.allowed ? "Выполнить" : "Нет доступа"}
             </button>
           </article>
         );
       })}
+
+      {filteredCommands.length === 0 && (
+        <div className="empty-inline">
+          <Command size={20} />
+          <span>Команд по такому фильтру нет.</span>
+        </div>
+      )}
     </section>
   );
 }
