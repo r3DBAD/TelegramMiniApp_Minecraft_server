@@ -81,11 +81,17 @@ select:focus-visible {
 .command-title,
 .risk-badge,
 .user-meta span,
+.user-badges,
+.user-badges span,
+.settings-stats span,
+.settings-block-title,
 .status-pill,
 .icon-button,
 .run-button,
 .tabs button,
 .user-actions button,
+.settings-actions button,
+.profile-link button,
 .access-form button {
   display: inline-flex;
   align-items: center;
@@ -164,6 +170,8 @@ h2 {
 .run-button,
 .tabs button,
 .user-actions button,
+.settings-actions button,
+.profile-link button,
 .access-form button {
   justify-content: center;
   gap: 7px;
@@ -172,6 +180,8 @@ h2 {
   border-radius: 8px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.07);
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
   transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 
@@ -179,6 +189,8 @@ h2 {
 .run-button:hover:not(:disabled),
 .tabs button:hover,
 .user-actions button:hover,
+.settings-actions button:hover:not(:disabled),
+.profile-link button:hover:not(:disabled),
 .access-form button:hover {
   border-color: var(--line-strong);
   background: rgba(255, 255, 255, 0.1);
@@ -364,7 +376,7 @@ pre {
 input,
 select {
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0 10px;
@@ -404,19 +416,41 @@ input::placeholder {
 }
 
 .settings-panel {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 14px;
-  background: rgba(16, 23, 19, 0.82);
+  gap: 14px;
 }
 
 .settings-card {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 14px;
+  padding: 16px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent),
+    linear-gradient(145deg, rgba(88, 208, 111, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent),
     var(--surface);
+}
+
+.user-picker {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.settings-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.settings-stats span {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #d7e2d7;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 13px;
 }
 
 .settings-summary {
@@ -426,10 +460,82 @@ input::placeholder {
   gap: 12px;
 }
 
+.selected-user-title {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.selected-user-title h2 {
+  overflow-wrap: anywhere;
+  font-size: 22px;
+}
+
+.user-avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(88, 208, 111, 0.34);
+  border-radius: 8px;
+  color: #dffff0;
+  background:
+    linear-gradient(135deg, rgba(88, 208, 111, 0.24), rgba(105, 183, 255, 0.1)),
+    rgba(255, 255, 255, 0.06);
+  font-weight: 800;
+}
+
+.user-badges {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.user-badges span {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: #d3ded3;
+  background: rgba(255, 255, 255, 0.055);
+  font-size: 12px;
+}
+
+.status-dot.active {
+  border-color: rgba(88, 208, 111, 0.34);
+  color: #c9ffd2;
+  background: rgba(88, 208, 111, 0.12);
+}
+
+.status-dot.pending {
+  border-color: rgba(214, 164, 58, 0.36);
+  color: #ffe1a1;
+  background: rgba(214, 164, 58, 0.12);
+}
+
 .settings-grid {
   display: grid;
   grid-template-columns: minmax(180px, 1.2fr) minmax(180px, 1fr);
+  gap: 12px;
+}
+
+.settings-block {
+  display: grid;
+  align-content: start;
   gap: 10px;
+  border: 1px solid rgba(195, 230, 204, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.settings-block-title {
+  gap: 7px;
+  color: #dce8dc;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .field-label {
@@ -444,14 +550,40 @@ input::placeholder {
 }
 
 .settings-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
+  display: grid;
   gap: 8px;
+}
+
+.settings-actions.two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-actions.role-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-actions button,
+.profile-link button {
+  min-height: 44px;
+  padding: 0 12px;
+  font-weight: 750;
+}
+
+.primary-button {
+  border-color: rgba(88, 208, 111, 0.44) !important;
+  color: #eaffee !important;
+  background: linear-gradient(180deg, rgba(63, 174, 87, 0.95), rgba(38, 125, 63, 0.95)) !important;
+}
+
+.secondary-button {
+  border-color: rgba(195, 230, 204, 0.18) !important;
+  color: #f1f7f1 !important;
+  background: rgba(255, 255, 255, 0.075) !important;
 }
 
 .danger-button {
   border-color: rgba(239, 96, 86, 0.42) !important;
+  color: #ffe6e3 !important;
   background: rgba(239, 96, 86, 0.13) !important;
 }
 
@@ -465,7 +597,7 @@ input::placeholder {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+  justify-content: flex-end;
 }
 
 .user-meta span,
@@ -491,9 +623,8 @@ input::placeholder {
 
 .profile-link {
   display: grid;
-  grid-template-columns: minmax(130px, 1fr) auto;
+  grid-template-columns: minmax(130px, 1fr) minmax(126px, auto);
   gap: 8px;
-  min-width: min(100%, 320px);
 }
 
 .access-form {
@@ -556,12 +687,25 @@ input::placeholder {
   .grid,
   .command-row,
   .user-row,
-  .settings-grid {
+  .settings-grid,
+  .user-picker,
+  .settings-actions.role-actions {
     grid-template-columns: 1fr;
   }
 
   .settings-summary {
     display: grid;
+  }
+
+  .user-meta,
+  .settings-stats {
+    justify-content: stretch;
+  }
+
+  .settings-stats span {
+    flex: 1;
+    justify-content: center;
+    text-align: center;
   }
 
   .tabs {
@@ -576,8 +720,8 @@ input::placeholder {
     justify-content: stretch;
   }
 
-  .settings-actions {
-    align-items: stretch;
+  .settings-actions.two-columns {
+    grid-template-columns: 1fr;
   }
 
   .profile-link {
@@ -587,6 +731,7 @@ input::placeholder {
 
   .user-actions button,
   .settings-actions button,
+  .profile-link button,
   .run-button {
     width: 100%;
   }
