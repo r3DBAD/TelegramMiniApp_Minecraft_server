@@ -2,7 +2,7 @@ import json
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.db import get_pool
 from app.security.dependencies import get_current_user, require_permission
@@ -14,7 +14,9 @@ router = APIRouter()
 
 
 class ExecuteCommandBody(BaseModel):
-    params: dict = Field(default_factory=dict)
+    model_config = ConfigDict(extra="forbid")
+
+    params: dict[str, str | int | float | bool] = Field(default_factory=dict)
     confirmed: bool = False
 
 

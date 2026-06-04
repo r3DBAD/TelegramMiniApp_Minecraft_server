@@ -22,8 +22,15 @@ def render_command(
     current_user: CurrentUser,
 ) -> str:
     safe_values: dict[str, str] = {}
+    template_fields = _template_fields(template)
+    unexpected_params = set(params) - template_fields
+    if unexpected_params:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Unexpected parameter: {sorted(unexpected_params)[0]}",
+        )
 
-    for name in _template_fields(template):
+    for name in template_fields:
         definition = params_schema.get(name, {"type": "string"})
         field_type = definition.get("type", "string")
 

@@ -17,7 +17,7 @@ class UserStatusBody(BaseModel):
 
 
 class RoleBody(BaseModel):
-    roleKey: str
+    roleKey: str = Field(pattern="^(owner|admin|moderator|player|viewer)$")
 
 
 class PermissionOverrideBody(BaseModel):
@@ -27,7 +27,7 @@ class PermissionOverrideBody(BaseModel):
 
 
 class MinecraftProfileBody(BaseModel):
-    username: str
+    username: str = Field(min_length=3, max_length=16)
 
 
 @router.get("")
@@ -84,6 +84,9 @@ async def update_user_status(
     pool: asyncpg.Pool = Depends(get_pool),
     current_user: CurrentUser = Depends(require_permission("users.manage")),
 ) -> dict[str, str]:
+    if user_id == current_user.id and body.status != "active":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot block or deactivate your own account")
+
     async with pool.acquire() as connection:
         result = await connection.execute(
             "UPDATE mc_panel.users SET status = $2 WHERE id = $1",
@@ -119,6 +122,11 @@ async def grant_role(
     pool: asyncpg.Pool = Depends(get_pool),
     current_user: CurrentUser = Depends(require_permission("roles.manage")),
 ) -> dict[str, str]:
+    if user_id == current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change your own roles")
+    if body.roleKey == "owner" and "owner" not in current_user.roles:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owner can grant owner role")
+
     async with pool.acquire() as connection:
         result = await connection.execute(
             """
@@ -145,6 +153,11 @@ async def revoke_role(
     pool: asyncpg.Pool = Depends(get_pool),
     current_user: CurrentUser = Depends(require_permission("roles.manage")),
 ) -> dict[str, str]:
+    if user_id == current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change your own roles")
+    if role_key == "owner" and "owner" not in current_user.roles:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owner can revoke owner role")
+
     async with pool.acquire() as connection:
         await connection.execute(
             """
@@ -166,6 +179,11 @@ async def set_permission_override(
     pool: asyncpg.Pool = Depends(get_pool),
     current_user: CurrentUser = Depends(require_permission("roles.manage")),
 ) -> dict[str, str]:
+    if user_id == current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change your own permissions")
+    if body.permissionKey in {"roles.manage", "users.manage"} and "owner" not in current_user.roles:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owner can change critical user permissions")
+
     async with pool.acquire() as connection:
         result = await connection.execute(
             """

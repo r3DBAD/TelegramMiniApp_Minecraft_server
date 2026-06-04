@@ -17,6 +17,9 @@ class TelegramInitData:
 
 
 def validate_init_data(raw_init_data: str, bot_token: str, max_age_seconds: int) -> TelegramInitData:
+    if len(raw_init_data) > 8192:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Telegram initData is too large")
+
     pairs = parse_qsl(raw_init_data, keep_blank_values=True, strict_parsing=False)
     data = dict(pairs)
     received_hash = data.get("hash")
@@ -28,7 +31,10 @@ def validate_init_data(raw_init_data: str, bot_token: str, max_age_seconds: int)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Telegram auth_date is missing")
 
     auth_date = int(auth_date_raw)
-    if time.time() - auth_date > max_age_seconds:
+    now = time.time()
+    if auth_date - now > 60:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Telegram initData auth_date is in the future")
+    if now - auth_date > max_age_seconds:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Telegram initData expired")
 
     data_check_string = "\n".join(

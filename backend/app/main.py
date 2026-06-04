@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.db import create_pool
 from app.routers import auth, commands, server, users
+from app.security.rate_limit import RateLimitMiddleware
 from app.services.rcon import RconClient
 
 
@@ -23,6 +24,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Minecraft Telegram Mini App API", version="0.1.0", lifespan=lifespan)
 
 settings = get_settings()
+app.add_middleware(
+    RateLimitMiddleware,
+    default_limit=(settings.api_rate_limit_requests, settings.api_rate_limit_window_seconds),
+    route_limits={
+        "/api/auth": (settings.auth_rate_limit_requests, settings.auth_rate_limit_window_seconds),
+    },
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,

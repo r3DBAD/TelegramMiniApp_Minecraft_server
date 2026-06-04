@@ -7,6 +7,7 @@ interface Window {
       ready: () => void;
       expand: () => void;
       close: () => void;
+      enableClosingConfirmation?: () => void;
       colorScheme?: "light" | "dark";
     };
   };

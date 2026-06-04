@@ -6,6 +6,7 @@ from app.config import Settings, get_settings
 from app.db import get_pool
 from app.security.dependencies import get_current_user
 from app.security.permissions import CurrentUser
+from app.services.commands import validate_minecraft_username
 from app.services.telegram_notify import AccessRequestNotification, notify_access_request
 
 router = APIRouter()
@@ -40,6 +41,7 @@ async def create_access_request(
     current_user: CurrentUser = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, str]:
+    minecraft_username = validate_minecraft_username(body.minecraft_username) if body.minecraft_username else None
     payload = getattr(request.state, "telegram_user_payload", "{}")
     async with pool.acquire() as connection:
         await connection.execute(
@@ -51,7 +53,7 @@ async def create_access_request(
             """,
             current_user.telegram_user_id,
             payload,
-            body.minecraft_username,
+            minecraft_username,
         )
 
     background_tasks.add_task(
@@ -61,7 +63,7 @@ async def create_access_request(
         AccessRequestNotification(
             requester_telegram_id=current_user.telegram_user_id,
             requester_name=format_requester_name(current_user),
-            minecraft_username=body.minecraft_username,
+            minecraft_username=minecraft_username,
             web_app_url=str(settings.web_app_url),
         ),
     )
