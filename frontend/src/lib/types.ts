@@ -55,6 +55,13 @@ export type PermissionDef = {
   risk_level: "low" | "medium" | "high" | "critical";
 };
 
+export type UserPermissionState = PermissionDef & {
+  role_keys: string[];
+  override_effect?: "allow" | "deny";
+  override_reason?: string;
+  effective: boolean;
+};
+
 export type AccessRequestItem = {
   id: number;
   telegram_user_id: number;
@@ -72,7 +79,7 @@ export type AuditEvent = {
   action: string;
   entity_type?: string;
   entity_id?: string;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown> | string | null;
   created_at: string;
   telegram_username?: string;
   first_name?: string;

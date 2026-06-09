@@ -115,6 +115,49 @@ async def permission_catalog(
     return {"permissions": [dict(row) for row in rows]}
 
 
+@router.get("/{user_id}/permissions/effective")
+async def effective_permissions(
+    user_id: int,
+    pool: asyncpg.Pool = Depends(get_pool),
+    _: CurrentUser = Depends(require_permission("roles.manage")),
+) -> dict:
+    async with pool.acquire() as connection:
+        target_exists = await connection.fetchval("SELECT EXISTS (SELECT 1 FROM mc_panel.users WHERE id = $1)", user_id)
+        if not target_exists:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+        rows = await connection.fetch(
+            """
+            WITH role_based AS (
+                SELECT p.id AS permission_id, array_agg(DISTINCT r.key ORDER BY r.key) AS role_keys
+                FROM mc_panel.user_roles ur
+                JOIN mc_panel.roles r ON r.id = ur.role_id
+                JOIN mc_panel.role_permissions rp ON rp.role_id = r.id
+                JOIN mc_panel.permissions p ON p.id = rp.permission_id
+                WHERE ur.user_id = $1
+                GROUP BY p.id
+            )
+            SELECT p.key, p.category, p.description, p.risk_level,
+                   COALESCE(rb.role_keys, '{}') AS role_keys,
+                   upo.effect AS override_effect,
+                   upo.reason AS override_reason,
+                   (
+                       (rb.permission_id IS NOT NULL OR upo.effect = 'allow')
+                       AND COALESCE(upo.effect, 'allow') <> 'deny'
+                   ) AS effective
+            FROM mc_panel.permissions p
+            LEFT JOIN role_based rb ON rb.permission_id = p.id
+            LEFT JOIN mc_panel.user_permission_overrides upo
+              ON upo.permission_id = p.id
+             AND upo.user_id = $1
+             AND (upo.expires_at IS NULL OR upo.expires_at > now())
+            ORDER BY p.category, p.key
+            """,
+            user_id,
+        )
+    return {"permissions": [dict(row) for row in rows]}
+
+
 @router.patch("/{user_id}/status")
 async def update_user_status(
     user_id: int,
@@ -131,6 +174,8 @@ async def update_user_status(
         exists = await connection.fetchval("SELECT EXISTS (SELECT 1 FROM mc_panel.users WHERE id = $1)", user_id)
         if not exists:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        if body.status == "blocked" and await _is_last_active_owner(connection, user_id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot block the last active owner")
 
         if body.status == "active":
             username = await approve_user(connection, current_user.id, user_id)
@@ -192,6 +237,8 @@ async def revoke_role(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owner can revoke owner role")
 
     async with pool.acquire() as connection:
+        if role_key == "owner" and await _is_last_active_owner(connection, user_id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot revoke the last active owner")
         await connection.execute(
             """
             DELETE FROM mc_panel.user_roles ur
@@ -244,6 +291,35 @@ async def set_permission_override(
     return {"status": "updated"}
 
 
+@router.delete("/{user_id}/permissions/{permission_key}")
+async def clear_permission_override(
+    user_id: int,
+    permission_key: str,
+    pool: asyncpg.Pool = Depends(get_pool),
+    current_user: CurrentUser = Depends(require_permission("roles.manage")),
+) -> dict[str, str]:
+    if user_id == current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change your own permissions")
+    if permission_key in {"roles.manage", "users.manage"} and "owner" not in current_user.roles:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owner can change critical user permissions")
+
+    async with pool.acquire() as connection:
+        result = await connection.execute(
+            """
+            DELETE FROM mc_panel.user_permission_overrides upo
+            USING mc_panel.permissions p
+            WHERE upo.permission_id = p.id
+              AND upo.user_id = $1
+              AND p.key = $2
+            """,
+            user_id,
+            permission_key,
+        )
+        if not result.endswith("0"):
+            await audit(connection, current_user.id, "users.permission.clear", "user", str(user_id), {"permissionKey": permission_key})
+    return {"status": "cleared"}
+
+
 @router.put("/{user_id}/minecraft-profile")
 async def set_minecraft_profile(
     user_id: int,
@@ -256,3 +332,29 @@ async def set_minecraft_profile(
         async with connection.transaction():
             await set_profile_for_user(connection, current_user.id, user_id, username)
     return {"status": "updated"}
+
+
+async def _is_last_active_owner(connection: asyncpg.Connection, user_id: int) -> bool:
+    row = await connection.fetchrow(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM mc_panel.user_roles ur
+            JOIN mc_panel.roles r ON r.id = ur.role_id
+            JOIN mc_panel.users u ON u.id = ur.user_id
+            WHERE ur.user_id = $1
+              AND r.key = 'owner'
+              AND u.status = 'active'
+        ) AS is_owner,
+        (
+            SELECT count(*)
+            FROM mc_panel.user_roles ur
+            JOIN mc_panel.roles r ON r.id = ur.role_id
+            JOIN mc_panel.users u ON u.id = ur.user_id
+            WHERE r.key = 'owner'
+              AND u.status = 'active'
+        ) AS active_owner_count
+        """,
+        user_id,
+    )
+    return bool(row and row["is_owner"] and row["active_owner_count"] <= 1)

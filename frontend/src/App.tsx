@@ -72,6 +72,7 @@ export default function App() {
           accessRequests={accessRequests}
           auditEvents={auditEvents}
           whitelist={whitelist}
+          currentUserId={me?.user.id}
           canManageRoles={can.has("roles.manage")}
           canManageWhitelist={can.has("minecraft.whitelist.write")}
           canReadAudit={can.has("audit.read")}

@@ -4,8 +4,11 @@ import {
   Crown,
   FileClock,
   Gamepad2,
+  KeyRound,
   Link,
   ListChecks,
+  LockKeyhole,
+  MinusCircle,
   Shield,
   Trash2,
   UserCog,
@@ -18,7 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../lib/api";
 import { auditActionLabel, permissionLabel, riskLabels, sameMinecraftName, statusLabel, userLabel } from "../lib/panel";
-import type { AccessRequestItem, AuditEvent, PermissionDef, UserListItem, WhitelistResponse } from "../lib/types";
+import type { AccessRequestItem, AuditEvent, PermissionDef, UserListItem, UserPermissionState, WhitelistResponse } from "../lib/types";
 
 type UsersSettingsPanelProps = {
   users: UserListItem[];
@@ -26,6 +29,7 @@ type UsersSettingsPanelProps = {
   accessRequests: AccessRequestItem[];
   auditEvents: AuditEvent[];
   whitelist: WhitelistResponse | null;
+  currentUserId?: number;
   canManageRoles: boolean;
   canManageWhitelist: boolean;
   canReadAudit: boolean;
@@ -39,14 +43,17 @@ export function UsersSettingsPanel({
   accessRequests,
   auditEvents,
   whitelist,
+  currentUserId,
   canManageRoles,
   canManageWhitelist,
   canReadAudit,
   onlinePlayers,
   reload
 }: UsersSettingsPanelProps) {
-  const [selectedPermission, setSelectedPermission] = useState<Record<number, string>>({});
   const [minecraftNames, setMinecraftNames] = useState<Record<number, string>>({});
+  const [permissionState, setPermissionState] = useState<Record<number, UserPermissionState[]>>({});
+  const [permissionBusy, setPermissionBusy] = useState(false);
+  const [permissionReloadToken, setPermissionReloadToken] = useState(0);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(users[0]?.id ?? null);
   const visibleUsers = useMemo(
     () =>
@@ -54,10 +61,6 @@ export function UsersSettingsPanel({
         .filter((user) => user.status !== "blocked")
         .sort((left, right) => Number(right.status === "pending") - Number(left.status === "pending")),
     [users]
-  );
-  const commandPermissions = useMemo(
-    () => permissions.filter((permission) => permission.category === "command"),
-    [permissions]
   );
   const selectedUser = visibleUsers.find((user) => user.id === selectedUserId) || visibleUsers[0];
   const pendingCount = accessRequests.length || visibleUsers.filter((user) => user.status === "pending").length;
@@ -74,6 +77,35 @@ export function UsersSettingsPanel({
     }
   }, [selectedUserId, visibleUsers]);
 
+  useEffect(() => {
+    if (!selectedUser || !canManageRoles) return;
+
+    let cancelled = false;
+    setPermissionBusy(true);
+    api<{ permissions: UserPermissionState[] }>(`/users/${selectedUser.id}/permissions/effective`)
+      .then((result) => {
+        if (!cancelled) {
+          setPermissionState((current) => ({ ...current, [selectedUser.id]: result.permissions }));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPermissionState((current) => ({ ...current, [selectedUser.id]: [] }));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPermissionBusy(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canManageRoles, permissionReloadToken, selectedUser]);
+
+  function refreshPermissionState() {
+    setPermissionReloadToken((value) => value + 1);
+  }
+
   async function setStatus(user: UserListItem, status: string) {
     await api(`/users/${user.id}/status`, {
       method: "PATCH",
@@ -88,17 +120,28 @@ export function UsersSettingsPanel({
       body: JSON.stringify({ roleKey })
     });
     await reload();
+    refreshPermissionState();
   }
 
-  async function setPermission(user: UserListItem, effect: "allow" | "deny") {
-    const permissionKey = selectedPermission[user.id];
-    if (!permissionKey) return;
+  async function revokeRole(user: UserListItem, roleKey: string) {
+    await api(`/users/${user.id}/roles/${roleKey}`, { method: "DELETE" });
+    await reload();
+    refreshPermissionState();
+  }
 
+  async function setPermission(user: UserListItem, permissionKey: string, effect: "allow" | "deny") {
     await api(`/users/${user.id}/permissions`, {
       method: "PUT",
       body: JSON.stringify({ permissionKey, effect, reason: "Mini App override" })
     });
     await reload();
+    refreshPermissionState();
+  }
+
+  async function clearPermission(user: UserListItem, permissionKey: string) {
+    await api(`/users/${user.id}/permissions/${encodeURIComponent(permissionKey)}`, { method: "DELETE" });
+    await reload();
+    refreshPermissionState();
   }
 
   async function setMinecraftProfile(user: UserListItem) {
@@ -161,7 +204,10 @@ export function UsersSettingsPanel({
           {selectedUser && (
             <SelectedUserSettings
               user={selectedUser}
-              commandPermissions={commandPermissions}
+              permissions={permissionState[selectedUser.id] || []}
+              permissionsFallback={permissions}
+              permissionsBusy={permissionBusy}
+              currentUserId={currentUserId}
               canManageRoles={canManageRoles}
               onlinePlayers={onlinePlayers}
               minecraftName={
@@ -170,12 +216,12 @@ export function UsersSettingsPanel({
                 selectedUser.requested_minecraft_username ??
                 ""
               }
-              selectedPermission={selectedPermission[selectedUser.id] || ""}
               setMinecraftName={(value) => setMinecraftNames((current) => ({ ...current, [selectedUser.id]: value }))}
-              setSelectedPermission={(value) => setSelectedPermission((current) => ({ ...current, [selectedUser.id]: value }))}
               setStatus={setStatus}
               grantRole={grantRole}
+              revokeRole={revokeRole}
               setPermission={setPermission}
+              clearPermission={clearPermission}
               setMinecraftProfile={setMinecraftProfile}
             />
           )}
@@ -249,31 +295,37 @@ function AccessRequestInbox({ requests, users, setStatus }: AccessRequestInboxPr
 
 type SelectedUserSettingsProps = {
   user: UserListItem;
-  commandPermissions: PermissionDef[];
+  permissions: UserPermissionState[];
+  permissionsFallback: PermissionDef[];
+  permissionsBusy: boolean;
+  currentUserId?: number;
   canManageRoles: boolean;
   onlinePlayers: string[];
   minecraftName: string;
-  selectedPermission: string;
   setMinecraftName: (value: string) => void;
-  setSelectedPermission: (value: string) => void;
   setStatus: (user: UserListItem, status: string) => Promise<void>;
   grantRole: (user: UserListItem, roleKey: string) => Promise<void>;
-  setPermission: (user: UserListItem, effect: "allow" | "deny") => Promise<void>;
+  revokeRole: (user: UserListItem, roleKey: string) => Promise<void>;
+  setPermission: (user: UserListItem, permissionKey: string, effect: "allow" | "deny") => Promise<void>;
+  clearPermission: (user: UserListItem, permissionKey: string) => Promise<void>;
   setMinecraftProfile: (user: UserListItem) => Promise<void>;
 };
 
 function SelectedUserSettings({
   user,
-  commandPermissions,
+  permissions,
+  permissionsFallback,
+  permissionsBusy,
+  currentUserId,
   canManageRoles,
   onlinePlayers,
   minecraftName,
-  selectedPermission,
   setMinecraftName,
-  setSelectedPermission,
   setStatus,
   grantRole,
+  revokeRole,
   setPermission,
+  clearPermission,
   setMinecraftProfile
 }: SelectedUserSettingsProps) {
   const isOnline = Boolean(
@@ -281,16 +333,35 @@ function SelectedUserSettings({
   );
   const name = userLabel(user);
   const avatarText = name.slice(0, 2).toUpperCase();
+  const isSelf = user.id === currentUserId;
+  const isOwner = user.roles.includes("owner");
+  const protectedSelf = isSelf && isOwner;
 
   async function updateStatus(nextStatus: string) {
+    if (protectedSelf && nextStatus !== "active") return;
     if (nextStatus === "blocked" && !confirm(`Отклонить доступ для ${name}?`)) return;
     await setStatus(user, nextStatus);
   }
 
-  async function updatePermission(effect: "allow" | "deny") {
-    if (!selectedPermission) return;
-    if (effect === "deny" && !confirm(`Запретить право "${permissionLabel(selectedPermission)}" для ${name}?`)) return;
-    await setPermission(user, effect);
+  async function updateRole(roleKey: string, action: "grant" | "revoke") {
+    if (protectedSelf) return;
+    if (action === "revoke" && !confirm(`Снять роль ${roleKey} у ${name}?`)) return;
+    if (action === "grant") {
+      await grantRole(user, roleKey);
+    } else {
+      await revokeRole(user, roleKey);
+    }
+  }
+
+  async function updatePermission(permissionKey: string, effect: "allow" | "deny") {
+    if (protectedSelf) return;
+    if (effect === "deny" && !confirm(`Запретить право "${permissionLabel(permissionKey)}" для ${name}?`)) return;
+    await setPermission(user, permissionKey, effect);
+  }
+
+  async function removeOverride(permissionKey: string) {
+    if (protectedSelf) return;
+    await clearPermission(user, permissionKey);
   }
 
   return (
@@ -347,9 +418,14 @@ function SelectedUserSettings({
             <Shield size={16} />
             Доступ
           </div>
+          {protectedSelf && (
+            <p className="guard-note">
+              <LockKeyhole size={15} /> Это твой owner-профиль. Самому себе нельзя забирать доступ, роли и права.
+            </p>
+          )}
           <div className="settings-actions two-columns">
             {user.status === "pending" ? (
-              <button className="primary-button" onClick={() => updateStatus("active")}>
+              <button className="primary-button" disabled={protectedSelf} onClick={() => updateStatus("active")}>
                 <CheckCircle2 size={16} /> Одобрить
               </button>
             ) : (
@@ -357,7 +433,7 @@ function SelectedUserSettings({
                 <CheckCircle2 size={16} /> Активен
               </button>
             )}
-            <button className="danger-button" onClick={() => updateStatus("blocked")}>
+            <button className="danger-button" disabled={protectedSelf} onClick={() => updateStatus("blocked")}>
               <XCircle size={16} /> Отклонить
             </button>
           </div>
@@ -370,53 +446,154 @@ function SelectedUserSettings({
                 <Crown size={16} />
                 Роль
               </div>
-              <div className="settings-actions role-actions">
-                <button className={user.roles.includes("player") ? "primary-button" : "secondary-button"} onClick={() => grantRole(user, "player")}>
-                  <Shield size={16} /> Player
-                </button>
-                <button className={user.roles.includes("moderator") ? "primary-button" : "secondary-button"} onClick={() => grantRole(user, "moderator")}>
-                  <Ban size={16} /> Moderator
-                </button>
-                <button className={user.roles.includes("admin") ? "primary-button" : "secondary-button"} onClick={() => grantRole(user, "admin")}>
-                  <Crown size={16} /> Admin
-                </button>
-              </div>
+              <RoleMatrix roles={user.roles} disabled={protectedSelf} onChange={updateRole} />
             </section>
 
             <section className="settings-block wide-field">
               <div className="settings-block-title">
                 <UserCog size={16} />
-                Точные права
+                Права
               </div>
-              <div className="permission-grid" aria-label="Права пользователя">
-                {commandPermissions.map((permission) => (
-                  <button
-                    className={selectedPermission === permission.key ? "permission-tile active" : "permission-tile"}
-                    key={permission.key}
-                    aria-pressed={selectedPermission === permission.key}
-                    onClick={() => setSelectedPermission(permission.key)}
-                  >
-                    <span>
-                      {permissionLabel(permission.key)}
-                      <small className={`risk-badge ${permission.risk_level}`}>{riskLabels[permission.risk_level]}</small>
-                    </span>
-                    <small>{permission.description}</small>
-                  </button>
-                ))}
-              </div>
-              <div className="settings-actions two-columns">
-                <button className="primary-button" disabled={!selectedPermission} onClick={() => updatePermission("allow")}>
-                  Разрешить
-                </button>
-                <button className="danger-button" disabled={!selectedPermission} onClick={() => updatePermission("deny")}>
-                  Запретить
-                </button>
-              </div>
+              <PermissionMatrix
+                permissions={permissions}
+                fallback={permissionsFallback}
+                busy={permissionsBusy}
+                disabled={protectedSelf}
+                onAllow={(permissionKey) => updatePermission(permissionKey, "allow")}
+                onDeny={(permissionKey) => updatePermission(permissionKey, "deny")}
+                onClear={removeOverride}
+              />
             </section>
           </>
         )}
       </div>
     </article>
+  );
+}
+
+const roleOptions = [
+  { key: "player", label: "Player", icon: Shield },
+  { key: "moderator", label: "Moderator", icon: Ban },
+  { key: "admin", label: "Admin", icon: Crown },
+  { key: "owner", label: "Owner", icon: Crown }
+];
+
+function RoleMatrix({
+  roles,
+  disabled,
+  onChange
+}: {
+  roles: string[];
+  disabled: boolean;
+  onChange: (roleKey: string, action: "grant" | "revoke") => Promise<void>;
+}) {
+  return (
+    <div className="role-matrix">
+      {roleOptions.map((role) => {
+        const Icon = role.icon;
+        const enabled = roles.includes(role.key);
+        return (
+          <div className={enabled ? "role-row enabled" : "role-row"} key={role.key}>
+            <span>
+              <Icon size={16} />
+              {role.label}
+            </span>
+            <button
+              className={enabled ? "danger-button" : "secondary-button"}
+              disabled={disabled}
+              onClick={() => onChange(role.key, enabled ? "revoke" : "grant")}
+            >
+              {enabled ? "Снять" : "Выдать"}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PermissionMatrix({
+  permissions,
+  fallback,
+  busy,
+  disabled,
+  onAllow,
+  onDeny,
+  onClear
+}: {
+  permissions: UserPermissionState[];
+  fallback: PermissionDef[];
+  busy: boolean;
+  disabled: boolean;
+  onAllow: (permissionKey: string) => Promise<void>;
+  onDeny: (permissionKey: string) => Promise<void>;
+  onClear: (permissionKey: string) => Promise<void>;
+}) {
+  const rows: UserPermissionState[] = permissions.length
+    ? permissions
+    : fallback.map((permission) => ({
+        ...permission,
+        role_keys: [],
+        effective: false
+      }));
+  const sortedRows = [...rows].sort((left, right) => {
+    const leftScore = Number(right.effective) - Number(left.effective);
+    if (leftScore !== 0) return leftScore;
+    return left.key.localeCompare(right.key);
+  });
+
+  if (busy && rows.length === 0) {
+    return <div className="notice">Загружаю права пользователя...</div>;
+  }
+
+  return (
+    <div className="permission-grid" aria-label="Права пользователя">
+      {sortedRows.map((permission) => {
+        const denied = permission.override_effect === "deny";
+        const allowedOverride = permission.override_effect === "allow";
+        const byRole = permission.role_keys.length > 0;
+        const stateLabel = denied
+          ? "Запрещено"
+          : allowedOverride
+            ? "Выдано вручную"
+            : byRole
+              ? `По роли: ${permission.role_keys.join(", ")}`
+              : permission.effective
+                ? "Активно"
+                : "Нет";
+
+        return (
+          <article
+            className={`permission-tile ${permission.effective ? "enabled" : ""} ${denied ? "denied" : ""}`}
+            key={permission.key}
+          >
+            <div className="permission-topline">
+              <span>
+                <KeyRound size={15} />
+                {permissionLabel(permission.key)}
+              </span>
+              <small className={`risk-badge ${permission.risk_level}`}>{riskLabels[permission.risk_level]}</small>
+            </div>
+            <p>{permission.description}</p>
+            <div className="permission-state">
+              <span>{stateLabel}</span>
+              {permission.override_effect && <small>override</small>}
+            </div>
+            <div className="permission-actions">
+              <button className="primary-button" disabled={disabled || allowedOverride} onClick={() => onAllow(permission.key)}>
+                Разрешить
+              </button>
+              <button className="danger-button" disabled={disabled || denied} onClick={() => onDeny(permission.key)}>
+                Запретить
+              </button>
+              <button className="secondary-button" disabled={disabled || !permission.override_effect} onClick={() => onClear(permission.key)}>
+                <MinusCircle size={14} /> Сбросить
+              </button>
+            </div>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -529,7 +706,7 @@ function AuditLog({ events }: { events: AuditEvent[] }) {
               <span>{event.first_name || event.telegram_username || "System"}</span>
             </div>
             <time dateTime={event.created_at}>{formatDate(event.created_at)}</time>
-            {metadataPreview(event.metadata) && <small>{metadataPreview(event.metadata)}</small>}
+            {metadataPreview(event) && <small>{metadataPreview(event)}</small>}
           </article>
         ))}
       </div>
@@ -546,10 +723,33 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-function metadataPreview(metadata: Record<string, unknown>): string {
-  return Object.entries(metadata || {})
+function metadataPreview(event: AuditEvent): string {
+  const metadata = normalizeMetadata(event.metadata);
+  const parts: string[] = [];
+
+  if (typeof metadata.commandKey === "string") parts.push(`Команда: ${metadata.commandKey}`);
+  if (typeof metadata.permissionKey === "string") parts.push(`Право: ${permissionLabel(metadata.permissionKey)}`);
+  if (typeof metadata.roleKey === "string") parts.push(`Роль: ${metadata.roleKey}`);
+  if (typeof metadata.username === "string") parts.push(`Ник: ${metadata.username}`);
+  if (typeof metadata.status === "string") parts.push(`Статус: ${statusLabel(metadata.status)}`);
+  if (typeof metadata.effect === "string") parts.push(metadata.effect === "allow" ? "Разрешено" : "Запрещено");
+
+  if (parts.length > 0) return parts.slice(0, 3).join(" · ");
+
+  return Object.entries(metadata)
     .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value))
-    .slice(0, 3)
+    .slice(0, 2)
     .map(([key, value]) => `${key}: ${String(value)}`)
     .join(" · ");
+}
+
+function normalizeMetadata(metadata: AuditEvent["metadata"]): Record<string, unknown> {
+  if (!metadata) return {};
+  if (typeof metadata !== "string") return metadata;
+  try {
+    const parsed = JSON.parse(metadata);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
 }
