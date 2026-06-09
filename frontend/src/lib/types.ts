@@ -54,3 +54,36 @@ export type PermissionDef = {
   description: string;
   risk_level: "low" | "medium" | "high" | "critical";
 };
+
+export type AccessRequestItem = {
+  id: number;
+  telegram_user_id: number;
+  requested_minecraft_username?: string;
+  status: string;
+  created_at: string;
+  user_id?: number;
+  telegram_username?: string;
+  first_name?: string;
+  user_status?: string;
+};
+
+export type AuditEvent = {
+  id: number;
+  action: string;
+  entity_type?: string;
+  entity_id?: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  telegram_username?: string;
+  first_name?: string;
+};
+
+export type WhitelistEntry = {
+  name?: string;
+  uuid?: string;
+};
+
+export type WhitelistResponse = {
+  raw: string;
+  file: WhitelistEntry[];
+};

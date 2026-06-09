@@ -14,7 +14,7 @@ import { hasTelegramInitData } from "./lib/api";
 export default function App() {
   const [tab, setTab] = useState<PanelTab>("overview");
   const hasAuth = hasTelegramInitData();
-  const { me, status, commands, users, permissionCatalog, busy, error, output, setOutput, can, load } = usePanelData(hasAuth);
+  const { me, status, commands, users, permissionCatalog, accessRequests, auditEvents, whitelist, busy, error, output, setOutput, can, load } = usePanelData(hasAuth);
 
   if (!hasAuth) {
     return (
@@ -57,7 +57,9 @@ export default function App() {
 
       <PanelTabs tab={tab} canManageUsers={can.has("users.manage")} onChange={setTab} />
 
-      {tab === "overview" && <OverviewPanel me={me} status={status} output={output} />}
+      {tab === "overview" && (
+        <OverviewPanel me={me} status={status} commands={commands} output={output} onOutput={setOutput} />
+      )}
 
       {tab === "commands" && (
         <CommandsPanel commands={commands} onlinePlayers={status?.players || []} onOutput={setOutput} />
@@ -67,7 +69,12 @@ export default function App() {
         <UsersSettingsPanel
           users={users}
           permissions={permissionCatalog}
+          accessRequests={accessRequests}
+          auditEvents={auditEvents}
+          whitelist={whitelist}
           canManageRoles={can.has("roles.manage")}
+          canManageWhitelist={can.has("minecraft.whitelist.write")}
+          canReadAudit={can.has("audit.read")}
           onlinePlayers={status?.players || []}
           reload={load}
         />

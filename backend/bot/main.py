@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.db import create_pool
 from app.services.minecraft import parse_list_response
 from app.services.rcon import RconClient, RconError
+from app.services.user_admin import approve_user, reject_user, whitelist_add
 
 
 async def main() -> None:
@@ -57,6 +58,9 @@ async def main() -> None:
             "/panel - кнопка панели\n"
             "/status - статус Minecraft\n"
             "/players - игроки онлайн\n"
+            "/requests - новые заявки\n"
+            "/approve <telegram_id> - одобрить заявку\n"
+            "/reject <telegram_id> - отклонить заявку\n"
             "/id - твой Telegram ID"
         )
 
@@ -98,6 +102,66 @@ async def main() -> None:
     @dispatcher.message(Command("players"))
     async def players_command(message: Message) -> None:
         await status_command(message)
+
+    @dispatcher.message(Command("requests"))
+    async def requests_command(message: Message) -> None:
+        user = await require_bot_permission(pool, message, "users.manage")
+        if not user:
+            return
+
+        rows = await list_pending_requests(pool)
+        if not rows:
+            await message.answer("Новых заявок нет.")
+            return
+
+        lines = ["Новые заявки:"]
+        for row in rows[:10]:
+            label = row["telegram_username"] or row["first_name"] or str(row["telegram_user_id"])
+            minecraft = row["requested_minecraft_username"] or "ник не указан"
+            lines.append(f"`{row['telegram_user_id']}` - {label} - `{minecraft}`")
+        await message.answer("\n".join(lines), parse_mode="Markdown")
+
+    @dispatcher.message(Command("approve"))
+    async def approve_command(message: Message) -> None:
+        actor = await require_bot_permission(pool, message, "users.manage")
+        if not actor:
+            return
+
+        telegram_user_id = parse_telegram_id_arg(message)
+        if telegram_user_id is None:
+            await message.answer("Использование: `/approve <telegram_id>`", parse_mode="Markdown")
+            return
+
+        target = await find_user_by_telegram_id(pool, telegram_user_id)
+        if not target:
+            await message.answer("Пользователь не найден. Он должен сначала открыть бота или Mini App.")
+            return
+
+        async with pool.acquire() as connection:
+            username = await approve_user(connection, actor["id"], target["id"])
+
+        whitelist_output = await whitelist_add(rcon, username) if username else "Minecraft ник не указан"
+        await message.answer(f"Одобрено: `{telegram_user_id}`\nWhitelist: `{whitelist_output}`", parse_mode="Markdown")
+
+    @dispatcher.message(Command("reject"))
+    async def reject_command(message: Message) -> None:
+        actor = await require_bot_permission(pool, message, "users.manage")
+        if not actor:
+            return
+
+        telegram_user_id = parse_telegram_id_arg(message)
+        if telegram_user_id is None:
+            await message.answer("Использование: `/reject <telegram_id>`", parse_mode="Markdown")
+            return
+
+        target = await find_user_by_telegram_id(pool, telegram_user_id)
+        if not target:
+            await message.answer("Пользователь не найден.")
+            return
+
+        async with pool.acquire() as connection:
+            await reject_user(connection, actor["id"], target["id"])
+        await message.answer(f"Отклонено: `{telegram_user_id}`", parse_mode="Markdown")
 
     try:
         await dispatcher.start_polling(bot)
@@ -167,6 +231,57 @@ async def has_permission(pool: asyncpg.Pool, user_id: int, permission: str) -> b
             permission,
         )
     return bool(row and row["allowed"])
+
+
+async def require_bot_permission(pool: asyncpg.Pool, message: Message, permission: str) -> asyncpg.Record | None:
+    if not message.from_user:
+        return None
+
+    user = await upsert_user(pool, message)
+    if user["status"] != "active":
+        await message.answer("Доступ еще не активирован.")
+        return None
+    if not await has_permission(pool, user["id"], permission):
+        await message.answer(f"Нет права `{permission}`.", parse_mode="Markdown")
+        return None
+    return user
+
+
+async def list_pending_requests(pool: asyncpg.Pool) -> list[asyncpg.Record]:
+    async with pool.acquire() as connection:
+        return await connection.fetch(
+            """
+            SELECT ar.telegram_user_id, ar.requested_minecraft_username,
+                   u.telegram_username, u.first_name
+            FROM mc_panel.access_requests ar
+            LEFT JOIN mc_panel.users u ON u.telegram_user_id = ar.telegram_user_id
+            WHERE ar.status = 'pending'
+            ORDER BY ar.created_at DESC
+            LIMIT 20
+            """
+        )
+
+
+async def find_user_by_telegram_id(pool: asyncpg.Pool, telegram_user_id: int) -> asyncpg.Record | None:
+    async with pool.acquire() as connection:
+        return await connection.fetchrow(
+            """
+            SELECT id, status
+            FROM mc_panel.users
+            WHERE telegram_user_id = $1
+            """,
+            telegram_user_id,
+        )
+
+
+def parse_telegram_id_arg(message: Message) -> int | None:
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) != 2:
+        return None
+    try:
+        return int(parts[1].strip())
+    except ValueError:
+        return None
 
 
 async def send_panel_button(bot: Bot, message: Message) -> None:

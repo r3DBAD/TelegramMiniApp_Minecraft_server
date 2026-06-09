@@ -1,4 +1,4 @@
-import { AlertTriangle, Command, Lock, Play, Search } from "lucide-react";
+import { AlertTriangle, Command, Lock, Play, Search, Star } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import { useDeferredValue, useMemo, useState } from "react";
 
@@ -20,6 +20,9 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
   const [running, setRunning] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
+  const [favorites, setFavorites] = useState<Set<string>>(() => new Set(JSON.parse(localStorage.getItem("mcPanelFavorites") || "[]") as string[]));
+  const [recent, setRecent] = useState<string[]>(() => JSON.parse(localStorage.getItem("mcPanelRecent") || "[]") as string[]);
+  const [pendingCommand, setPendingCommand] = useState<CommandDef | null>(null);
   const deferredQuery = useDeferredValue(query);
   const available = commands.filter((command) => command.allowed).length;
   const filteredCommands = useMemo(
@@ -42,7 +45,16 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
 
   async function execute(command: CommandDef) {
     if (!command.allowed) return;
-    if (command.confirmationRequired && !confirm(`${command.title}?`)) return;
+    if (command.confirmationRequired) {
+      setPendingCommand(command);
+      return;
+    }
+
+    await runCommand(command);
+  }
+
+  async function runCommand(command: CommandDef) {
+    if (!command.allowed) return;
 
     const params = buildCommandParams(command, values[command.key] || {}, onlinePlayers);
     setRunning(command.key);
@@ -53,11 +65,34 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
         body: JSON.stringify({ params, confirmed: true })
       });
       onOutput(result.output || "OK");
+      rememberRecent(command.key);
     } catch (err) {
       onOutput(err instanceof Error ? err.message : "Ошибка команды");
     } finally {
       setRunning(null);
+      setPendingCommand(null);
     }
+  }
+
+  function toggleFavorite(commandKey: string) {
+    setFavorites((current) => {
+      const next = new Set(current);
+      if (next.has(commandKey)) {
+        next.delete(commandKey);
+      } else {
+        next.add(commandKey);
+      }
+      localStorage.setItem("mcPanelFavorites", JSON.stringify([...next]));
+      return next;
+    });
+  }
+
+  function rememberRecent(commandKey: string) {
+    setRecent((current) => {
+      const next = [commandKey, ...current.filter((key) => key !== commandKey)].slice(0, 5);
+      localStorage.setItem("mcPanelRecent", JSON.stringify(next));
+      return next;
+    });
   }
 
   return (
@@ -94,6 +129,21 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
         </div>
       </div>
 
+      {(favorites.size > 0 || recent.length > 0) && (
+        <div className="quick-command-rail">
+          {[...favorites, ...recent.filter((key) => !favorites.has(key))].slice(0, 6).map((key) => {
+            const command = commands.find((item) => item.key === key && item.allowed);
+            if (!command) return null;
+            return (
+              <button key={key} onClick={() => execute(command)}>
+                {favorites.has(key) && <Star size={14} />}
+                {command.title}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {filteredCommands.map((command) => {
         const params = commandParamEntries(command);
         const fieldCount = params.filter(([, param]) => param.type !== "own_minecraft_username").length;
@@ -105,10 +155,20 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
             <div className="command-main">
               <div className="command-title">
                 <h2>{command.title}</h2>
-                <span className={`risk-badge ${command.riskLevel}`}>
-                  {command.riskLevel === "critical" && <AlertTriangle size={14} />}
-                  {riskLabels[command.riskLevel]}
-                </span>
+                <div className="command-title-actions">
+                  <button
+                    className={favorites.has(command.key) ? "favorite-button active" : "favorite-button"}
+                    aria-label={favorites.has(command.key) ? "Убрать из избранного" : "Добавить в избранное"}
+                    aria-pressed={favorites.has(command.key)}
+                    onClick={() => toggleFavorite(command.key)}
+                  >
+                    <Star size={15} />
+                  </button>
+                  <span className={`risk-badge ${command.riskLevel}`}>
+                    {command.riskLevel === "critical" && <AlertTriangle size={14} />}
+                    {riskLabels[command.riskLevel]}
+                  </span>
+                </div>
               </div>
               <p>{command.description || command.permissionKey}</p>
             </div>
@@ -193,6 +253,25 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
         <div className="empty-inline">
           <Command size={20} />
           <span>Команд по такому фильтру нет.</span>
+        </div>
+      )}
+
+      {pendingCommand && (
+        <div className="sheet-backdrop" role="presentation" onClick={() => setPendingCommand(null)}>
+          <section className="confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirm-command-title" onClick={(event) => event.stopPropagation()}>
+            <div>
+              <p className="eyebrow">Подтверждение</p>
+              <h2 id="confirm-command-title">{pendingCommand.title}</h2>
+              <p>{pendingCommand.description || "Команда будет выполнена через RCON."}</p>
+            </div>
+            <div className={`risk-badge ${pendingCommand.riskLevel}`}>
+              {riskLabels[pendingCommand.riskLevel]}
+            </div>
+            <div className="settings-actions two-columns">
+              <button className="secondary-button" onClick={() => setPendingCommand(null)}>Отмена</button>
+              <button className="danger-button" onClick={() => runCommand(pendingCommand)}>Выполнить</button>
+            </div>
+          </section>
         </div>
       )}
     </section>

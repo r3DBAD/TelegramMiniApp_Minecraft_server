@@ -1,13 +1,12 @@
-import json
-
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.db import get_pool
 from app.security.dependencies import require_permission
 from app.security.permissions import CurrentUser
 from app.services.commands import validate_minecraft_username
+from app.services.user_admin import approve_user, audit, grant_role as grant_role_for_user, reject_user, set_minecraft_profile as set_profile_for_user, whitelist_add
 
 router = APIRouter()
 
@@ -61,6 +60,45 @@ async def list_users(
     return {"users": [dict(row) for row in rows]}
 
 
+@router.get("/access-requests")
+async def list_access_requests(
+    pool: asyncpg.Pool = Depends(get_pool),
+    _: CurrentUser = Depends(require_permission("users.manage")),
+) -> dict:
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT ar.id, ar.telegram_user_id, ar.requested_minecraft_username,
+                   ar.status, ar.created_at,
+                   u.id AS user_id, u.telegram_username, u.first_name, u.status AS user_status
+            FROM mc_panel.access_requests ar
+            LEFT JOIN mc_panel.users u ON u.telegram_user_id = ar.telegram_user_id
+            WHERE ar.status = 'pending'
+            ORDER BY ar.created_at DESC
+            """
+        )
+    return {"requests": [dict(row) for row in rows]}
+
+
+@router.get("/audit-log")
+async def audit_log(
+    pool: asyncpg.Pool = Depends(get_pool),
+    _: CurrentUser = Depends(require_permission("audit.read")),
+) -> dict:
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT al.id, al.action, al.entity_type, al.entity_id, al.metadata,
+                   al.created_at, u.telegram_username, u.first_name
+            FROM mc_panel.audit_log al
+            LEFT JOIN mc_panel.users u ON u.id = al.actor_user_id
+            ORDER BY al.created_at DESC
+            LIMIT 50
+            """
+        )
+    return {"events": [dict(row) for row in rows]}
+
+
 @router.get("/permissions/catalog")
 async def permission_catalog(
     pool: asyncpg.Pool = Depends(get_pool),
@@ -81,38 +119,33 @@ async def permission_catalog(
 async def update_user_status(
     user_id: int,
     body: UserStatusBody,
+    request: Request,
     pool: asyncpg.Pool = Depends(get_pool),
     current_user: CurrentUser = Depends(require_permission("users.manage")),
-) -> dict[str, str]:
+) -> dict[str, str | None]:
     if user_id == current_user.id and body.status != "active":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot block or deactivate your own account")
 
+    whitelist_output = None
     async with pool.acquire() as connection:
-        result = await connection.execute(
-            "UPDATE mc_panel.users SET status = $2 WHERE id = $1",
-            user_id,
-            body.status,
-        )
-        if body.status in ("active", "blocked"):
-            await connection.execute(
-                """
-                UPDATE mc_panel.access_requests ar
-                SET status = $2,
-                    reviewed_by = $3,
-                    reviewed_at = now()
-                FROM mc_panel.users u
-                WHERE u.id = $1
-                  AND ar.telegram_user_id = u.telegram_user_id
-                  AND ar.status = 'pending'
-                """,
-                user_id,
-                "approved" if body.status == "active" else "rejected",
-                current_user.id,
-            )
-        await _audit(connection, current_user.id, "users.status.update", "user", str(user_id), body.model_dump())
-    if result.endswith("0"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    return {"status": "updated"}
+        exists = await connection.fetchval("SELECT EXISTS (SELECT 1 FROM mc_panel.users WHERE id = $1)", user_id)
+        if not exists:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+        if body.status == "active":
+            username = await approve_user(connection, current_user.id, user_id)
+        elif body.status == "blocked":
+            await reject_user(connection, current_user.id, user_id)
+            username = None
+        else:
+            await connection.execute("UPDATE mc_panel.users SET status = 'pending' WHERE id = $1", user_id)
+            await audit(connection, current_user.id, "users.status.update", "user", str(user_id), body.model_dump())
+            username = None
+
+    if body.status == "active" and username:
+        whitelist_output = await whitelist_add(request.app.state.rcon, username)
+
+    return {"status": "updated", "whitelistOutput": whitelist_output}
 
 
 @router.post("/{user_id}/roles")
@@ -128,22 +161,22 @@ async def grant_role(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owner can grant owner role")
 
     async with pool.acquire() as connection:
-        result = await connection.execute(
+        target_exists = await connection.fetchval(
             """
-            INSERT INTO mc_panel.user_roles (user_id, role_id, granted_by)
-            SELECT $1, r.id, $3
-            FROM mc_panel.roles r
-            WHERE r.key = $2
-            ON CONFLICT DO NOTHING
+            SELECT EXISTS (
+                SELECT 1
+                FROM mc_panel.users u
+                CROSS JOIN mc_panel.roles r
+                WHERE u.id = $1 AND r.key = $2
+            )
             """,
             user_id,
             body.roleKey,
-            current_user.id,
         )
-        await _audit(connection, current_user.id, "users.role.grant", "user", str(user_id), body.model_dump())
-    if result.endswith("0"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Role or user not found")
-    return {"status": "granted"}
+        if not target_exists:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Role or user not found")
+        result = await grant_role_for_user(connection, current_user.id, user_id, body.roleKey)
+    return {"status": "unchanged" if result.endswith("0") else "granted"}
 
 
 @router.delete("/{user_id}/roles/{role_key}")
@@ -168,7 +201,7 @@ async def revoke_role(
             user_id,
             role_key,
         )
-        await _audit(connection, current_user.id, "users.role.revoke", "user", str(user_id), {"roleKey": role_key})
+        await audit(connection, current_user.id, "users.role.revoke", "user", str(user_id), {"roleKey": role_key})
     return {"status": "revoked"}
 
 
@@ -205,7 +238,7 @@ async def set_permission_override(
             body.reason,
             current_user.id,
         )
-        await _audit(connection, current_user.id, "users.permission.override", "user", str(user_id), body.model_dump())
+        await audit(connection, current_user.id, "users.permission.override", "user", str(user_id), body.model_dump())
     if result.endswith("0"):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Permission or user not found")
     return {"status": "updated"}
@@ -221,33 +254,5 @@ async def set_minecraft_profile(
     username = validate_minecraft_username(body.username)
     async with pool.acquire() as connection:
         async with connection.transaction():
-            await connection.execute(
-                "UPDATE mc_panel.minecraft_profiles SET is_primary = false WHERE user_id = $1",
-                user_id,
-            )
-            await connection.execute(
-                """
-                INSERT INTO mc_panel.minecraft_profiles (user_id, username, is_primary)
-                VALUES ($1, $2, true)
-                ON CONFLICT ((lower(username)))
-                DO UPDATE SET user_id = EXCLUDED.user_id, is_primary = true
-                """,
-                user_id,
-                username,
-            )
-            await _audit(connection, current_user.id, "users.minecraft_profile.set", "user", str(user_id), {"username": username})
+            await set_profile_for_user(connection, current_user.id, user_id, username)
     return {"status": "updated"}
-
-
-async def _audit(connection: asyncpg.Connection, actor_id: int, action: str, entity_type: str, entity_id: str, metadata: dict) -> None:
-    await connection.execute(
-        """
-        INSERT INTO mc_panel.audit_log (actor_user_id, action, entity_type, entity_id, metadata)
-        VALUES ($1, $2, $3, $4, $5::jsonb)
-        """,
-        actor_id,
-        action,
-        entity_type,
-        entity_id,
-        json.dumps(metadata),
-    )

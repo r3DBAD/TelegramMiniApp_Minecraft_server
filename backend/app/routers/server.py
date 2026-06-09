@@ -2,14 +2,24 @@ import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, Field
 
 from app.config import get_settings
+from app.db import get_pool
 from app.security.dependencies import require_permission
 from app.security.permissions import CurrentUser
+from app.services.commands import validate_minecraft_username
 from app.services.minecraft import parse_list_response
 from app.services.rcon import RconError
+from app.services.user_admin import audit, whitelist_add, whitelist_remove
+
+import asyncpg
 
 router = APIRouter()
+
+
+class WhitelistBody(BaseModel):
+    username: str = Field(min_length=3, max_length=16)
 
 
 @router.get("/status")
@@ -56,6 +66,34 @@ async def whitelist(
     except (RconError, OSError, TimeoutError) as exc:
         response = f"RCON unavailable: {exc}"
     return {"raw": response, "file": _read_json_file("whitelist.json")}
+
+
+@router.post("/whitelist")
+async def whitelist_create(
+    body: WhitelistBody,
+    request: Request,
+    pool: asyncpg.Pool = Depends(get_pool),
+    current_user: CurrentUser = Depends(require_permission("minecraft.whitelist.write")),
+) -> dict:
+    username = validate_minecraft_username(body.username)
+    output = await whitelist_add(request.app.state.rcon, username)
+    async with pool.acquire() as connection:
+        await audit(connection, current_user.id, "minecraft.whitelist.add", "minecraft_profile", username, {"username": username})
+    return {"status": "updated", "output": output}
+
+
+@router.delete("/whitelist/{username}")
+async def whitelist_delete(
+    username: str,
+    request: Request,
+    pool: asyncpg.Pool = Depends(get_pool),
+    current_user: CurrentUser = Depends(require_permission("minecraft.whitelist.write")),
+) -> dict:
+    safe_username = validate_minecraft_username(username)
+    output = await whitelist_remove(request.app.state.rcon, safe_username)
+    async with pool.acquire() as connection:
+        await audit(connection, current_user.id, "minecraft.whitelist.remove", "minecraft_profile", safe_username, {"username": safe_username})
+    return {"status": "updated", "output": output}
 
 
 @router.get("/ops")
