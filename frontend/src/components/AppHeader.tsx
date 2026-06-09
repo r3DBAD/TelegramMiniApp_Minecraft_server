@@ -29,7 +29,7 @@ export function AppHeader({ me, status, busy, onRefresh }: AppHeaderProps) {
           <Server size={16} />
           {status?.online ? "Online" : "Offline"}
         </span>
-        <button className="icon-button" onClick={onRefresh} disabled={busy} title="Обновить">
+        <button className="icon-button" onClick={onRefresh} disabled={busy} title="Обновить" aria-label="Обновить данные">
           <RefreshCw size={19} />
         </button>
       </div>

@@ -113,9 +113,10 @@ export function UsersSettingsPanel({
               <button
                 className={user.id === selectedUser?.id ? "active" : ""}
                 key={user.id}
+                aria-pressed={user.id === selectedUser?.id}
                 onClick={() => setSelectedUserId(user.id)}
               >
-                <span className={`mini-status ${user.status}`} />
+                <span className={`mini-status ${user.status}`} aria-hidden="true" />
                 <strong>{userLabel(user)}</strong>
                 <small>{statusLabel(user.status)}</small>
               </button>
@@ -186,6 +187,16 @@ function SelectedUserSettings({
   const name = userLabel(user);
   const avatarText = name.slice(0, 2).toUpperCase();
 
+  async function updateStatus(nextStatus: string) {
+    if (nextStatus === "blocked" && !confirm(`Отклонить доступ для ${name}?`)) return;
+    await setStatus(user, nextStatus);
+  }
+
+  async function updatePermission(effect: "allow" | "deny") {
+    if (effect === "deny" && !confirm(`Запретить выбранное право для ${name}?`)) return;
+    await setPermission(user, effect);
+  }
+
   return (
     <article className={`user-detail-card user-status-${user.status}`}>
       <div className="settings-summary">
@@ -220,7 +231,14 @@ function SelectedUserSettings({
           <label className="field-label">
             Ник игрока
             <div className="profile-link">
-              <input value={minecraftName} placeholder="Minecraft ник" onChange={(event) => setMinecraftName(event.target.value)} />
+              <input
+                name={`minecraft-profile-${user.id}`}
+                value={minecraftName}
+                placeholder="Minecraft ник…"
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(event) => setMinecraftName(event.target.value)}
+              />
               <button className="secondary-button" onClick={() => setMinecraftProfile(user)}>
                 <Link size={16} /> Привязать
               </button>
@@ -235,7 +253,7 @@ function SelectedUserSettings({
           </div>
           <div className="settings-actions two-columns">
             {user.status === "pending" ? (
-              <button className="primary-button" onClick={() => setStatus(user, "active")}>
+              <button className="primary-button" onClick={() => updateStatus("active")}>
                 <CheckCircle2 size={16} /> Одобрить
               </button>
             ) : (
@@ -243,7 +261,7 @@ function SelectedUserSettings({
                 <CheckCircle2 size={16} /> Активен
               </button>
             )}
-            <button className="danger-button" onClick={() => setStatus(user, "blocked")}>
+            <button className="danger-button" onClick={() => updateStatus("blocked")}>
               <XCircle size={16} /> Отклонить
             </button>
           </div>
@@ -276,7 +294,11 @@ function SelectedUserSettings({
               </div>
               <label className="field-label">
                 Permission
-                <select value={selectedPermission} onChange={(event) => setSelectedPermission(event.target.value)}>
+                <select
+                  name={`permission-${user.id}`}
+                  value={selectedPermission}
+                  onChange={(event) => setSelectedPermission(event.target.value)}
+                >
                   <option value="">Выбрать permission</option>
                   {commandPermissions.map((permission) => (
                     <option key={permission.key} value={permission.key}>
@@ -286,8 +308,8 @@ function SelectedUserSettings({
                 </select>
               </label>
               <div className="settings-actions two-columns">
-                <button className="primary-button" onClick={() => setPermission(user, "allow")}>Разрешить</button>
-                <button className="danger-button" onClick={() => setPermission(user, "deny")}>
+                <button className="primary-button" onClick={() => updatePermission("allow")}>Разрешить</button>
+                <button className="danger-button" onClick={() => updatePermission("deny")}>
                   Запретить
                 </button>
               </div>

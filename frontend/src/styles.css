@@ -17,7 +17,7 @@
   --red-soft: rgba(239, 99, 91, 0.14);
   --blue: #6cb8ff;
   --shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
-  font-family: Inter, "Aptos", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Aptos", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
@@ -29,6 +29,7 @@
 body {
   margin: 0;
   min-width: 320px;
+  overflow-x: hidden;
   background: var(--bg);
 }
 
@@ -40,6 +41,7 @@ select {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 button:disabled {
@@ -65,7 +67,7 @@ p {
   width: min(920px, 100%);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 12px 14px 28px;
+  padding: calc(12px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
   background:
     linear-gradient(180deg, rgba(21, 48, 39, 0.88), transparent 220px),
     radial-gradient(circle at 0 0, rgba(88, 214, 111, 0.12), transparent 260px),
@@ -494,6 +496,8 @@ input::placeholder {
   display: grid;
   gap: 12px;
   padding: 14px;
+  content-visibility: auto;
+  contain-intrinsic-size: 220px;
 }
 
 .command-card.locked {
@@ -895,7 +899,7 @@ input::placeholder {
 
 @media (max-width: 520px) {
   .shell {
-    padding: 10px 10px 24px;
+    padding: calc(10px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
   }
 
   .app-header {
@@ -953,5 +957,16 @@ input::placeholder {
 
   .user-choice-list button {
     flex: 0 0 72%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

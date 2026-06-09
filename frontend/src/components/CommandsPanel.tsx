@@ -1,6 +1,6 @@
 import { AlertTriangle, Command, Lock, Play, Search } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 
 import { api } from "../lib/api";
 import { buildCommandParams, commandParamEntries, riskLabels } from "../lib/panel";
@@ -20,6 +20,7 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
   const [running, setRunning] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
+  const deferredQuery = useDeferredValue(query);
   const available = commands.filter((command) => command.allowed).length;
   const filteredCommands = useMemo(
     () =>
@@ -27,7 +28,7 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
         if (!command.allowed) return false;
 
         const haystack = `${command.title} ${command.description || ""} ${command.key}`.toLowerCase();
-        const matchesQuery = haystack.includes(query.trim().toLowerCase());
+        const matchesQuery = haystack.includes(deferredQuery.trim().toLowerCase());
         const matchesRisk =
           riskFilter === "all" ||
           (riskFilter === "safe" && command.riskLevel === "low") ||
@@ -36,7 +37,7 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
 
         return matchesQuery && matchesRisk;
       }),
-    [commands, query, riskFilter]
+    [commands, deferredQuery, riskFilter]
   );
 
   async function execute(command: CommandDef) {
@@ -76,13 +77,20 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
       <div className="command-toolbar">
         <label className="search-field">
           <Search size={17} />
-          <input value={query} placeholder="Найти команду" onChange={(event) => setQuery(event.target.value)} />
+          <input
+            name="commandSearch"
+            value={query}
+            placeholder="Найти команду…"
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => setQuery(event.target.value)}
+          />
         </label>
         <div className="filter-pills">
-          <button className={riskFilter === "all" ? "active" : ""} onClick={() => setRiskFilter("all")}>Все</button>
-          <button className={riskFilter === "safe" ? "active" : ""} onClick={() => setRiskFilter("safe")}>Обычные</button>
-          <button className={riskFilter === "medium" ? "active" : ""} onClick={() => setRiskFilter("medium")}>Средние</button>
-          <button className={riskFilter === "danger" ? "active" : ""} onClick={() => setRiskFilter("danger")}>Опасные</button>
+          <button className={riskFilter === "all" ? "active" : ""} aria-pressed={riskFilter === "all"} onClick={() => setRiskFilter("all")}>Все</button>
+          <button className={riskFilter === "safe" ? "active" : ""} aria-pressed={riskFilter === "safe"} onClick={() => setRiskFilter("safe")}>Обычные</button>
+          <button className={riskFilter === "medium" ? "active" : ""} aria-pressed={riskFilter === "medium"} onClick={() => setRiskFilter("medium")}>Средние</button>
+          <button className={riskFilter === "danger" ? "active" : ""} aria-pressed={riskFilter === "danger"} onClick={() => setRiskFilter("danger")}>Опасные</button>
         </div>
       </div>
 
@@ -113,6 +121,8 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
                     <select
                       key={name}
                       aria-label={name}
+                      name={`${command.key}-${name}`}
+                      autoComplete="off"
                       value={values[command.key]?.[name] || onlinePlayers[0]}
                       onChange={(event) => setCommandValue(setValues, command.key, name, event.target.value)}
                     >
@@ -129,7 +139,10 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
                     <input
                       key={name}
                       aria-label={name}
-                      placeholder={name}
+                      name={`${command.key}-${name}`}
+                      placeholder={`${name}…`}
+                      autoComplete="off"
+                      spellCheck={false}
                       onChange={(event) => setCommandValue(setValues, command.key, name, event.target.value)}
                     />
                   );
@@ -139,6 +152,8 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
                     <select
                       key={name}
                       aria-label={name}
+                      name={`${command.key}-${name}`}
+                      autoComplete="off"
                       value={values[command.key]?.[name] || param.default || param.values[0]}
                       onChange={(event) => setCommandValue(setValues, command.key, name, event.target.value)}
                     >
@@ -153,7 +168,10 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
                   <input
                     key={name}
                     aria-label={name}
-                    placeholder={name}
+                    name={`${command.key}-${name}`}
+                    placeholder={`${name}…`}
+                    autoComplete="off"
+                    spellCheck={false}
                     defaultValue={param.default || ""}
                     onChange={(event) => setCommandValue(setValues, command.key, name, event.target.value)}
                   />
@@ -165,7 +183,7 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
 
             <button className="run-button" disabled={!canRun || running === command.key} onClick={() => execute(command)}>
               {command.allowed ? <Play size={17} /> : <Lock size={17} />}
-              {running === command.key ? "Выполняю" : command.allowed ? "Выполнить" : "Нет доступа"}
+              {running === command.key ? "Выполняю…" : command.allowed ? "Выполнить" : "Нет доступа"}
             </button>
           </article>
         );
