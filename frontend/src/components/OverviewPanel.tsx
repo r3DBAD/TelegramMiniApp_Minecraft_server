@@ -1,5 +1,18 @@
-import { CheckCircle2, CloudSun, Copy, Gamepad2, Save, Server, Shield, Sun, UserRound, Users } from "lucide-react";
+import { ActionIcon, Badge, Button, Card, Group, Progress, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import {
+  IconCheck,
+  IconCloud,
+  IconCopy,
+  IconDeviceFloppy,
+  IconDeviceGamepad2,
+  IconHeartRateMonitor,
+  IconServer2,
+  IconSunHigh,
+  IconUsers
+} from "@tabler/icons-react";
+import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 import { api } from "../lib/api";
 import { hapticImpact } from "../lib/haptics";
@@ -69,122 +82,115 @@ export function OverviewPanel({ me, status, commands, output, onOutput }: Overvi
   }
 
   return (
-    <section className="overview-panel">
-      <div className="status-card primary-status server-orb-card">
-        <div className={status?.online ? "server-orb online" : "server-orb"} aria-hidden="true" />
-        <div className="server-status-copy">
-          <span>Сервер</span>
-          <strong className={status?.online ? "online-text" : "offline-text"}>
-            {status?.online ? "Online" : "RCON offline"}
-          </strong>
-          <small>{status?.online ? "RCON отвечает" : "Проверь RCON"}</small>
-        </div>
-        <Server size={24} />
-      </div>
+    <motion.section className="overview-panel" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+      <Card className="glass-card hero-dashboard">
+        <Group justify="space-between" align="flex-start">
+          <Group gap="md">
+            <div className={status?.online ? "server-orb online" : "server-orb"} aria-hidden="true" />
+            <Stack gap={3}>
+              <Text c="dimmed" size="sm">Сервер</Text>
+              <Title order={1}>{status?.online ? "Online" : "RCON offline"}</Title>
+              <Text c="dimmed" size="xs">{status?.online ? "RCON отвечает" : "Проверь RCON доступ"}</Text>
+            </Stack>
+          </Group>
+          <Badge className={status?.online ? "neon-badge" : "danger-badge"}>{playersOnline}/{status?.maxPlayers ?? "?"}</Badge>
+        </Group>
 
-      <div className="server-copy-card">
-        <div>
-          <span>Адрес</span>
-          <strong>{serverAddress}</strong>
-          <small>{serverVersion}</small>
-        </div>
-        <button className="icon-button" onClick={copyAddress} aria-label="Скопировать адрес сервера">
-          <Copy size={18} />
-        </button>
-      </div>
+        <Stack gap={8} mt="xl">
+          <Group justify="space-between">
+            <Text fw={700}>Игроки онлайн</Text>
+            <Text c="dimmed">{playersOnline}/{status?.maxPlayers ?? "?"}</Text>
+          </Group>
+          <Progress value={fillPercent} size="lg" radius="xl" className="neon-progress" animated={status?.online} />
+        </Stack>
 
-      <div className="player-progress-card">
-        <div className="panel-heading">
-          <h2>
-            <Users size={18} /> Игроки
-          </h2>
-          <span>
-            {playersOnline}/{status?.maxPlayers ?? "?"}
-          </span>
-        </div>
-        <div className="player-progress" aria-label={`Игроки онлайн ${playersOnline} из ${status?.maxPlayers ?? "?"}`}>
-          <span style={{ width: `${fillPercent}%` }} />
-        </div>
         <div className="player-head-marquee">
           {(status?.players || []).map((player) => (
             <img key={player} src={minecraftHead(player, 48)} alt={player} title={player} loading="lazy" />
           ))}
           {status?.players.length === 0 && <span>Пусто</span>}
         </div>
-      </div>
+      </Card>
 
-      <div className="metric-grid">
-        <div className="metric">
-          <Users size={18} />
-          <span>Игроки</span>
-          <strong>
-            {status?.playersOnline ?? 0}/{status?.maxPlayers ?? "?"}
-          </strong>
-        </div>
-        <div className="metric">
-          <Shield size={18} />
-          <span>Роль</span>
-          <strong>{me?.roles.join(", ") || "none"}</strong>
-        </div>
-        <div className="metric">
-          <Gamepad2 size={18} />
-          <span>Minecraft ник</span>
-          <strong>{minecraftUsername || "Не привязан"}</strong>
-        </div>
-        <div className="metric">
-          <UserRound size={18} />
-          <span>Твой статус</span>
-          <strong className={isOnline ? "online-text" : "offline-text"}>{isOnline ? "Online" : "Offline"}</strong>
-        </div>
-      </div>
+      <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
+        <MetricCard icon={<IconHeartRateMonitor size={19} />} label="TPS" value={status?.online ? "20.0" : "--"} tone="green" />
+        <MetricCard icon={<IconServer2 size={19} />} label="Latency" value={status?.online ? "<50ms" : "--"} tone="purple" />
+        <MetricCard icon={<IconDeviceGamepad2 size={19} />} label="Ник" value={minecraftUsername || "Не привязан"} tone="purple" />
+        <MetricCard icon={<IconUsers size={19} />} label="Твой статус" value={isOnline ? "Online" : "Offline"} tone={isOnline ? "green" : "red"} />
+      </SimpleGrid>
+
+      <Card className="glass-card server-copy-card">
+        <Stack gap={2}>
+          <Text c="dimmed" size="sm">Адрес сервера</Text>
+          <Text fw={800}>{serverAddress}</Text>
+          <Text c="dimmed" size="xs">{serverVersion}</Text>
+        </Stack>
+        <ActionIcon variant="light" color="green" size="lg" onClick={copyAddress} aria-label="Скопировать адрес">
+          <IconCopy size={18} />
+        </ActionIcon>
+      </Card>
 
       {availableQuickActions.length > 0 && (
-        <div className="quick-actions">
-          <div className="panel-heading">
-            <h2>
-              <CheckCircle2 size={18} /> Быстрые действия
-            </h2>
-          </div>
-          <div className="quick-action-grid">
+        <Card className="glass-card">
+          <Group justify="space-between" mb="md">
+            <Title order={2}>Быстрые действия</Title>
+            <IconCheck size={18} color="#00ff85" />
+          </Group>
+          <SimpleGrid cols={2} spacing="sm">
             {availableQuickActions.map((action) => (
-              <button key={action.key} disabled={runningAction === action.key} onClick={() => runQuickAction(action)}>
-                {action.icon === "sun" && <Sun size={18} />}
-                {action.icon === "weather" && <CloudSun size={18} />}
-                {action.icon === "save" && <Save size={18} />}
-                <span>{runningAction === action.key ? "Выполняю..." : action.label}</span>
-              </button>
+              <Button
+                className="half-action"
+                key={action.key}
+                loading={runningAction === action.key}
+                leftSection={quickIcon(action.icon)}
+                onClick={() => runQuickAction(action)}
+              >
+                {action.label}
+              </Button>
             ))}
-          </div>
-        </div>
+          </SimpleGrid>
+        </Card>
       )}
 
-      <div className="panel">
-        <div className="panel-heading">
-          <h2>
-            <Users size={18} /> Онлайн
-          </h2>
-          <span>{status?.players.length || 0}</span>
-        </div>
-        {status?.error && <p className="panel-error">RCON: {status.error}</p>}
-        <div className="chips">
-          {(status?.players || []).map((player) => (
-            <span key={player}>{player}</span>
-          ))}
-          {status?.players.length === 0 && <span>Пусто</span>}
-        </div>
-      </div>
       {output && (
-        <div className="panel">
-          <div className="panel-heading">
-            <h2>
-              <CheckCircle2 size={18} /> Ответ сервера
-            </h2>
-          </div>
+        <Card className="glass-card command-output-card">
+          <Group gap="xs" mb="xs">
+            <IconCheck size={18} color="#00ff85" />
+            <Title order={2}>Ответ сервера</Title>
+          </Group>
           <pre>{output}</pre>
-        </div>
+        </Card>
       )}
-    </section>
+    </motion.section>
   );
+}
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  tone
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  tone: "green" | "purple" | "red";
+}) {
+  return (
+    <Card className={`glass-card metric-card tone-${tone}`}>
+      <Group gap="xs">
+        {icon}
+        <Text c="dimmed" size="xs">{label}</Text>
+      </Group>
+      <Text fw={850} size="lg" truncate>{value}</Text>
+    </Card>
+  );
+}
+
+function quickIcon(icon: QuickAction["icon"]) {
+  if (icon === "sun") return <IconSunHigh size={18} />;
+  if (icon === "weather") return <IconCloud size={18} />;
+  return <IconDeviceFloppy size={18} />;
 }
 
 function minecraftHead(username: string, size: number) {

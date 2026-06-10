@@ -1,3 +1,4 @@
+import { Switch } from "@mantine/core";
 import {
   Ban,
   CheckCircle2,
@@ -519,18 +520,22 @@ function RoleMatrix({
         const Icon = role.icon;
         const enabled = roles.includes(role.key);
         return (
-          <button
+          <div
             className={enabled ? "role-row enabled" : "role-row"}
             key={role.key}
-            disabled={disabled}
-            onClick={() => onChange(role.key, enabled ? "revoke" : "grant")}
           >
             <span>
               <Icon size={16} />
               {role.label}
             </span>
-            <span className="role-switch" aria-hidden="true"><i /></span>
-          </button>
+            <Switch
+              aria-label={`${enabled ? "Снять" : "Выдать"} ${role.label}`}
+              checked={enabled}
+              disabled={disabled}
+              color="green"
+              onChange={() => onChange(role.key, enabled ? "revoke" : "grant")}
+            />
+          </div>
         );
       })}
     </div>

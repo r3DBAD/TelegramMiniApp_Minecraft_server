@@ -1909,6 +1909,159 @@ body {
   }
 }
 
+/* Mantine premium skin */
+.mantine-Card-root.glass-card,
+.glass-card {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)),
+    rgba(15, 16, 20, 0.72);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px) saturate(1.2);
+}
+
+.hero-dashboard {
+  overflow: hidden;
+  padding: 18px;
+}
+
+.hero-dashboard::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 10%, rgba(0, 255, 133, 0.18), transparent 34%),
+    radial-gradient(circle at 88% 0%, rgba(122, 92, 255, 0.2), transparent 32%);
+}
+
+.hero-dashboard > * {
+  position: relative;
+  z-index: 1;
+}
+
+.neon-badge,
+.mantine-Badge-root.neon-badge {
+  border: 1px solid rgba(0, 255, 133, 0.38);
+  color: #dffff0;
+  background: rgba(0, 255, 133, 0.14);
+}
+
+.danger-badge,
+.mantine-Badge-root.danger-badge {
+  border: 1px solid rgba(229, 62, 62, 0.4);
+  color: #ffd7d7;
+  background: rgba(229, 62, 62, 0.14);
+}
+
+.neon-progress .mantine-Progress-section {
+  background: linear-gradient(90deg, #00ff85, #00bfff);
+  box-shadow: 0 0 22px rgba(0, 255, 133, 0.36);
+}
+
+.metric-card {
+  display: grid;
+  align-content: space-between;
+  min-height: 94px;
+  padding: 14px;
+}
+
+.metric-card.tone-green svg {
+  color: var(--green);
+}
+
+.metric-card.tone-purple svg {
+  color: var(--violet);
+}
+
+.metric-card.tone-red svg {
+  color: var(--red);
+}
+
+.half-action.mantine-Button-root,
+.chip-run.mantine-Button-root {
+  border: 1px solid rgba(0, 255, 133, 0.28);
+  border-radius: 14px;
+  color: #ffffff;
+  background: linear-gradient(180deg, rgba(0, 255, 133, 0.22), rgba(0, 191, 255, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.section-card {
+  grid-column: 1 / -1;
+}
+
+.command-chip-grid {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.command-chip {
+  display: grid;
+  min-height: 214px;
+  gap: 12px;
+  padding: 14px;
+}
+
+.chip-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(122, 92, 255, 0.28);
+  border-radius: 14px;
+  color: var(--violet);
+  background: rgba(122, 92, 255, 0.13);
+}
+
+.command-chip.risk-low .chip-icon,
+.command-chip.risk-low .chip-run {
+  color: var(--green);
+}
+
+.command-chip.risk-high .chip-icon,
+.command-chip.risk-critical .chip-icon {
+  color: var(--red);
+  background: rgba(229, 62, 62, 0.12);
+}
+
+.command-output-card pre {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.mantine-Input-input {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.mantine-Input-input:focus {
+  border-color: rgba(0, 255, 133, 0.48);
+}
+
+.mantine-Modal-content.glass-modal,
+.glass-modal {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(15, 16, 20, 0.88);
+  backdrop-filter: blur(18px);
+}
+
+.role-row {
+  border-radius: 14px;
+}
+
+.role-row .mantine-Switch-track {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.role-row .mantine-Switch-input:checked + .mantine-Switch-track {
+  background: linear-gradient(90deg, var(--green), var(--blue));
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

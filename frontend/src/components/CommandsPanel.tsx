@@ -1,27 +1,26 @@
+import { ActionIcon, Badge, Button, Card, Group, Modal, Select, SimpleGrid, Stack, Text, TextInput, Title } from "@mantine/core";
 import {
-  AlertTriangle,
-  Ban,
-  Clock3,
-  CloudSun,
-  Command,
-  Crown,
-  Gamepad2,
-  Gauge,
-  Lock,
-  MapPin,
-  MessageSquare,
-  Play,
-  Save,
-  Search,
-  ShieldCheck,
-  ShieldX,
-  Star,
-  Terminal,
-  UserX
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+  IconBan,
+  IconCloud,
+  IconCrown,
+  IconDeviceFloppy,
+  IconDeviceGamepad2,
+  IconGauge,
+  IconMapPin,
+  IconMessage,
+  IconPlayerPlay,
+  IconSearch,
+  IconShieldCheck,
+  IconShieldX,
+  IconStar,
+  IconTerminal2,
+  IconUserX,
+  IconUsers
+} from "@tabler/icons-react";
+import type { Icon } from "@tabler/icons-react";
 import type { Dispatch, SetStateAction } from "react";
 import { useDeferredValue, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 
 import { api } from "../lib/api";
 import { hapticImpact } from "../lib/haptics";
@@ -135,220 +134,212 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
   }
 
   return (
-    <section className="command-list">
-      <div className="section-head">
-        <div>
-          <p className="eyebrow">RCON allowlist</p>
-          <h2>
-            <Command size={18} /> Команды
-          </h2>
-        </div>
-        <span>
-          {available}/{commands.length} доступно
-        </span>
-      </div>
+    <motion.section className="command-list" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+      <Card className="glass-card section-card">
+        <Group justify="space-between">
+          <Stack gap={2}>
+            <Text className="eyebrow">RCON allowlist</Text>
+            <Title order={2}>Команды</Title>
+          </Stack>
+          <Badge className="neon-badge">{available}/{commands.length}</Badge>
+        </Group>
+      </Card>
 
-      <div className="command-toolbar">
-        <label className="search-field">
-          <Search size={17} />
-          <input
-            name="commandSearch"
-            value={query}
-            placeholder="Найти команду…"
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-        <div className="filter-pills">
-          <button className={riskFilter === "all" ? "active" : ""} aria-pressed={riskFilter === "all"} onClick={() => setRiskFilter("all")}>Все</button>
-          <button className={riskFilter === "safe" ? "active" : ""} aria-pressed={riskFilter === "safe"} onClick={() => setRiskFilter("safe")}>Обычные</button>
-          <button className={riskFilter === "medium" ? "active" : ""} aria-pressed={riskFilter === "medium"} onClick={() => setRiskFilter("medium")}>Средние</button>
-          <button className={riskFilter === "danger" ? "active" : ""} aria-pressed={riskFilter === "danger"} onClick={() => setRiskFilter("danger")}>Опасные</button>
-        </div>
-      </div>
+      <Card className="glass-card command-toolbar">
+        <TextInput
+          leftSection={<IconSearch size={17} />}
+          value={query}
+          placeholder="Найти команду"
+          autoComplete="off"
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+        <Group gap="xs" wrap="nowrap" className="filter-pills">
+          <Button variant={riskFilter === "all" ? "light" : "subtle"} onClick={() => setRiskFilter("all")}>Все</Button>
+          <Button variant={riskFilter === "safe" ? "light" : "subtle"} onClick={() => setRiskFilter("safe")}>Обычные</Button>
+          <Button variant={riskFilter === "medium" ? "light" : "subtle"} onClick={() => setRiskFilter("medium")}>Средние</Button>
+          <Button variant={riskFilter === "danger" ? "light" : "subtle"} color="red" onClick={() => setRiskFilter("danger")}>Опасные</Button>
+        </Group>
+      </Card>
 
       {history.length > 0 && (
-        <div className="command-history">
+        <Card className="glass-card command-history">
           {history.map((item) => (
             <div className={`chat-line ${item.source}`} key={item.id}>
               <span>{item.time}</span>
               <p>{item.source === "user" ? `Ты: ${item.text}` : `Система: ${item.text}`}</p>
             </div>
           ))}
-        </div>
+        </Card>
       )}
 
       {(favorites.size > 0 || recent.length > 0) && (
-        <div className="quick-command-rail">
+        <Group className="quick-command-rail" gap="xs">
           {[...favorites, ...recent.filter((key) => !favorites.has(key))].slice(0, 6).map((key) => {
             const command = commands.find((item) => item.key === key && item.allowed);
             if (!command) return null;
             return (
-              <button key={key} onClick={() => execute(command)}>
-                {favorites.has(key) && <Star size={14} />}
+              <Button variant="light" radius="xl" key={key} leftSection={favorites.has(key) ? <IconStar size={14} /> : null} onClick={() => execute(command)}>
                 {command.title}
-              </button>
+              </Button>
             );
           })}
-        </div>
+        </Group>
       )}
 
-      {filteredCommands.map((command) => {
-        const params = commandParamEntries(command);
-        const fieldCount = params.filter(([, param]) => param.type !== "own_minecraft_username").length;
-        const needsOnlineSelect = params.some(([, param]) => param.type === "minecraft_username") && command.key.startsWith("tp.");
-        const canRun = command.allowed && !(needsOnlineSelect && onlinePlayers.length === 0);
-
-        return (
-          <article className={`command-card risk-${command.riskLevel} ${!command.allowed ? "locked" : ""}`} key={command.key}>
-            <div className="command-icon">{commandIcon(command.key)}</div>
-            <div className="command-main">
-              <div className="command-title">
-                <h2>{command.title}</h2>
-                <div className="command-title-actions">
-                  <button
-                    className={favorites.has(command.key) ? "favorite-button active" : "favorite-button"}
-                    aria-label={favorites.has(command.key) ? "Убрать из избранного" : "Добавить в избранное"}
-                    aria-pressed={favorites.has(command.key)}
-                    onClick={() => toggleFavorite(command.key)}
-                  >
-                    <Star size={15} />
-                  </button>
-                  <span className={`risk-badge ${command.riskLevel}`}>
-                    {command.riskLevel === "critical" && <AlertTriangle size={14} />}
-                    {riskLabels[command.riskLevel]}
-                  </span>
-                </div>
-              </div>
-              <p>{command.description || command.permissionKey}</p>
-            </div>
-
-            <div className={fieldCount > 0 ? "command-fields" : "command-fields empty"}>
-              {params.map(([name, param]) => {
-                if (param.type === "own_minecraft_username") return null;
-                if (param.type === "minecraft_username" && onlinePlayers.length > 0) {
-                  return (
-                    <select
-                      key={name}
-                      aria-label={name}
-                      name={`${command.key}-${name}`}
-                      autoComplete="off"
-                      value={values[command.key]?.[name] || onlinePlayers[0]}
-                      onChange={(event) => setCommandValue(setValues, command.key, name, event.target.value)}
-                    >
-                      {onlinePlayers.map((player) => (
-                        <option key={player} value={player}>
-                          {name}: {player}
-                        </option>
-                      ))}
-                    </select>
-                  );
-                }
-                if (param.type === "minecraft_username") {
-                  return (
-                    <input
-                      key={name}
-                      aria-label={name}
-                      name={`${command.key}-${name}`}
-                      placeholder={`${name}…`}
-                      autoComplete="off"
-                      spellCheck={false}
-                      onChange={(event) => setCommandValue(setValues, command.key, name, event.target.value)}
-                    />
-                  );
-                }
-                if (param.type === "enum") {
-                  return (
-                    <select
-                      key={name}
-                      aria-label={name}
-                      name={`${command.key}-${name}`}
-                      autoComplete="off"
-                      value={values[command.key]?.[name] || param.default || param.values[0]}
-                      onChange={(event) => setCommandValue(setValues, command.key, name, event.target.value)}
-                    >
-                      {param.values.map((value) => (
-                        <option key={value}>{value}</option>
-                      ))}
-                    </select>
-                  );
-                }
-
-                return (
-                  <input
-                    key={name}
-                    aria-label={name}
-                    name={`${command.key}-${name}`}
-                    placeholder={`${name}…`}
-                    autoComplete="off"
-                    spellCheck={false}
-                    defaultValue={param.default || ""}
-                    onChange={(event) => setCommandValue(setValues, command.key, name, event.target.value)}
-                  />
-                );
-              })}
-              {fieldCount === 0 && <span>Параметры не нужны</span>}
-              {needsOnlineSelect && onlinePlayers.length === 0 && <span className="field-hint">Нет игроков онлайн</span>}
-            </div>
-
-            <button className="run-button compact-run" disabled={!canRun || running === command.key} onClick={() => execute(command)}>
-              {command.allowed ? <Play size={17} /> : <Lock size={17} />}
-              {running === command.key ? "..." : command.allowed ? "Run" : "Lock"}
-            </button>
-          </article>
-        );
-      })}
+      <SimpleGrid className="command-chip-grid" cols={{ base: 2, sm: 3, lg: 4 }} spacing="sm">
+        {filteredCommands.map((command) => (
+          <CommandChip
+            key={command.key}
+            command={command}
+            favorite={favorites.has(command.key)}
+            onlinePlayers={onlinePlayers}
+            running={running === command.key}
+            values={values[command.key] || {}}
+            onToggleFavorite={() => toggleFavorite(command.key)}
+            onValue={(field, value) => setCommandValue(setValues, command.key, field, value)}
+            onExecute={() => execute(command)}
+          />
+        ))}
+      </SimpleGrid>
 
       {filteredCommands.length === 0 && (
-        <div className="empty-inline">
-          <Command size={20} />
+        <Card className="glass-card empty-inline">
+          <IconTerminal2 size={20} />
           <span>Команд по такому фильтру нет.</span>
-        </div>
+        </Card>
       )}
 
-      {pendingCommand && (
-        <div className="sheet-backdrop" role="presentation" onClick={() => setPendingCommand(null)}>
-          <section className="confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirm-command-title" onClick={(event) => event.stopPropagation()}>
-            <div>
-              <p className="eyebrow">Подтверждение</p>
-              <h2 id="confirm-command-title">{pendingCommand.title}</h2>
-              <p>{pendingCommand.description || "Команда будет выполнена через RCON."}</p>
-            </div>
-            <div className={`risk-badge ${pendingCommand.riskLevel}`}>
-              {riskLabels[pendingCommand.riskLevel]}
-            </div>
-            <div className="settings-actions two-columns">
-              <button className="secondary-button" onClick={() => setPendingCommand(null)}>Отмена</button>
-              <button className="danger-button" onClick={() => runCommand(pendingCommand)}>Выполнить</button>
-            </div>
-          </section>
-        </div>
-      )}
-    </section>
+      <Modal
+        opened={Boolean(pendingCommand)}
+        onClose={() => setPendingCommand(null)}
+        title={pendingCommand?.title}
+        centered
+        classNames={{ content: "glass-modal" }}
+      >
+        {pendingCommand && (
+          <Stack>
+            <Text c="dimmed">{pendingCommand.description || "Команда будет выполнена через RCON."}</Text>
+            <Badge className={`risk-badge ${pendingCommand.riskLevel}`}>{riskLabels[pendingCommand.riskLevel]}</Badge>
+            <Group grow>
+              <Button variant="light" onClick={() => setPendingCommand(null)}>Отмена</Button>
+              <Button color="red" onClick={() => runCommand(pendingCommand)}>Выполнить</Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
+    </motion.section>
   );
 }
 
-const commandIcons: Array<[string, LucideIcon]> = [
-  ["say", MessageSquare],
-  ["kick", UserX],
-  ["ban", Ban],
-  ["pardon", ShieldCheck],
-  ["whitelist.add", ShieldCheck],
-  ["whitelist.remove", ShieldX],
-  ["op.", Crown],
-  ["tp.", MapPin],
-  ["gamemode", Gamepad2],
-  ["time", Clock3],
-  ["weather", CloudSun],
-  ["difficulty", Gauge],
-  ["save", Save],
-  ["raw", Terminal]
+function CommandChip({
+  command,
+  favorite,
+  onlinePlayers,
+  running,
+  values,
+  onToggleFavorite,
+  onValue,
+  onExecute
+}: {
+  command: CommandDef;
+  favorite: boolean;
+  onlinePlayers: string[];
+  running: boolean;
+  values: Record<string, string>;
+  onToggleFavorite: () => void;
+  onValue: (field: string, value: string) => void;
+  onExecute: () => void;
+}) {
+  const params = commandParamEntries(command);
+  const fieldCount = params.filter(([, param]) => param.type !== "own_minecraft_username").length;
+  const needsOnlineSelect = params.some(([, param]) => param.type === "minecraft_username") && command.key.startsWith("tp.");
+  const canRun = command.allowed && !(needsOnlineSelect && onlinePlayers.length === 0);
+  const Icon = commandIcon(command.key);
+
+  return (
+    <Card className={`glass-card command-chip risk-${command.riskLevel}`}>
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <div className="chip-icon"><Icon size={20} /></div>
+        <ActionIcon variant="subtle" color={favorite ? "yellow" : "gray"} onClick={onToggleFavorite} aria-label="Избранное">
+          <IconStar size={16} fill={favorite ? "currentColor" : "none"} />
+        </ActionIcon>
+      </Group>
+      <Stack gap={5}>
+        <Text fw={850} truncate>{command.title}</Text>
+        <Text c="dimmed" size="xs" lineClamp={2}>{command.description || command.permissionKey}</Text>
+        <Badge className={`risk-badge ${command.riskLevel}`}>{riskLabels[command.riskLevel]}</Badge>
+      </Stack>
+
+      {fieldCount > 0 && (
+        <Stack gap={6}>
+          {params.map(([name, param]) => {
+            if (param.type === "own_minecraft_username") return null;
+            if (param.type === "minecraft_username" && onlinePlayers.length > 0) {
+              return (
+                <Select
+                  key={name}
+                  aria-label={name}
+                  size="xs"
+                  data={onlinePlayers.map((player) => ({ value: player, label: player }))}
+                  value={values[name] || onlinePlayers[0]}
+                  onChange={(value) => onValue(name, value || "")}
+                />
+              );
+            }
+            if (param.type === "enum") {
+              return (
+                <Select
+                  key={name}
+                  aria-label={name}
+                  size="xs"
+                  data={param.values.map((value) => ({ value, label: value }))}
+                  value={values[name] || param.default || param.values[0]}
+                  onChange={(value) => onValue(name, value || "")}
+                />
+              );
+            }
+            return (
+              <TextInput
+                key={name}
+                aria-label={name}
+                size="xs"
+                placeholder={name}
+                defaultValue={param.type === "string" ? param.default || "" : ""}
+                onChange={(event) => onValue(name, event.currentTarget.value)}
+              />
+            );
+          })}
+        </Stack>
+      )}
+      {needsOnlineSelect && onlinePlayers.length === 0 && <Text c="dimmed" size="xs">Нет игроков онлайн</Text>}
+
+      <Button className="chip-run" leftSection={<IconPlayerPlay size={16} />} disabled={!canRun} loading={running} onClick={onExecute}>
+        Run
+      </Button>
+    </Card>
+  );
+}
+
+const commandIcons: Array<[string, Icon]> = [
+  ["say", IconMessage],
+  ["kick", IconUserX],
+  ["ban", IconBan],
+  ["pardon", IconShieldCheck],
+  ["whitelist.add", IconShieldCheck],
+  ["whitelist.remove", IconShieldX],
+  ["op.", IconCrown],
+  ["tp.", IconMapPin],
+  ["gamemode", IconDeviceGamepad2],
+  ["time", IconTerminal2],
+  ["weather", IconCloud],
+  ["difficulty", IconGauge],
+  ["save", IconDeviceFloppy],
+  ["raw", IconTerminal2],
+  ["players", IconUsers]
 ];
 
 function commandIcon(commandKey: string) {
-  const Icon = commandIcons.find(([prefix]) => commandKey.startsWith(prefix))?.[1] || Command;
-  return <Icon size={19} />;
+  return commandIcons.find(([prefix]) => commandKey.startsWith(prefix))?.[1] || IconTerminal2;
 }
 
 function setCommandValue(
