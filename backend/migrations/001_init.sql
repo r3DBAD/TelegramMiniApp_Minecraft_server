@@ -164,7 +164,7 @@ BEFORE UPDATE ON users
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 INSERT INTO minecraft_servers (key, name, rcon_host, rcon_port, rcon_password_env, container_name)
-VALUES ('main', 'SwagaServer', 'minecraft', 25575, 'RCON_PASSWORD', 'minecraft-1-21-11')
+VALUES ('main', 'Community Server', 'minecraft', 25575, 'RCON_PASSWORD', 'minecraft')
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO roles (key, name, description, priority, is_system) VALUES

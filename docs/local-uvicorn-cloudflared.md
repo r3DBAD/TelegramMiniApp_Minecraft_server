@@ -31,12 +31,10 @@ RCON_PASSWORD=your_current_rcon_password
 CORS_ORIGINS=https://temporary.trycloudflare.com
 ```
 
-Если Minecraft RCON находится на другом сервере, вместо `127.0.0.1` укажи IP/hostname сервера.
-
-Для твоего удаленного сервера это обычно будет:
+Если Minecraft RCON находится на другом сервере, вместо `127.0.0.1` укажи IP/hostname сервера:
 
 ```env
-RCON_HOST=202.49.176.99
+RCON_HOST=YOUR_MINECRAFT_HOST
 RCON_PORT=25575
 ```
 
@@ -159,7 +157,7 @@ PYTHONPATH=backend python -m app.rcon_check
 Проверить, открыт ли порт с Mac:
 
 ```bash
-nc -vz 202.49.176.99 25575
+nc -vz YOUR_MINECRAFT_HOST 25575
 ```
 
 Если порт закрыт, для локального теста можно временно открыть его на сервере:

@@ -24,7 +24,7 @@ export function AccessRequestForm() {
         <input
           name="minecraftUsername"
           value={minecraftUsername}
-          placeholder="Например, r3dbad…"
+          placeholder="Например, Steve"
           autoComplete="off"
           spellCheck={false}
           onChange={(event) => setMinecraftUsername(event.target.value)}

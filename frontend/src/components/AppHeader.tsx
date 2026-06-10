@@ -19,7 +19,7 @@ export function AppHeader({ me, status, busy, onRefresh }: AppHeaderProps) {
           <Server size={18} />
         </div>
         <div>
-          <p>SwagaServer</p>
+          <p>Community Server</p>
           <h1>Minecraft Panel</h1>
         </div>
       </div>

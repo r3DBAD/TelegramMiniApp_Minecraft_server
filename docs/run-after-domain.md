@@ -2,16 +2,16 @@
 
 ## 1. Проверить DNS
 
-Для этого проекта домен панели:
+Пример домена панели:
 
 ```text
-panel.r3dbad.ru
+panel.example.com
 ```
 
 Проверка:
 
 ```bash
-nslookup panel.r3dbad.ru
+nslookup panel.example.com
 ```
 
 В ответе должен быть публичный IP сервера.
@@ -25,8 +25,8 @@ cp .env.panel.example .env.panel
 Минимально нужны:
 
 ```env
-PANEL_DOMAIN=panel.r3dbad.ru
-WEB_APP_URL=https://panel.r3dbad.ru
+PANEL_DOMAIN=panel.example.com
+WEB_APP_URL=https://panel.example.com
 DATABASE_URL=postgresql://user:password@host:5432/dbname
 BOT_TOKEN=123456789:replace_me
 RCON_PASSWORD=your_current_rcon_password
@@ -91,8 +91,8 @@ docker compose \
 ## 7. Проверить в браузере
 
 ```text
-https://panel.r3dbad.ru
-https://panel.r3dbad.ru/api/healthz
+https://panel.example.com
+https://panel.example.com/api/healthz
 ```
 
 ## 8. Проверить Telegram

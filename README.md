@@ -1,22 +1,31 @@
 # Telegram Mini App Minecraft Panel
 
-Панель управления приватным Minecraft-сервером в Docker: Telegram Mini App, Telegram-бот, FastAPI backend, Postgres RBAC и HTTPS через Caddy.
+Универсальная панель управления приватным Minecraft-сервером через Telegram Mini App. Проект можно развернуть рядом с уже существующим Minecraft-сервером в Docker: мир и runtime-файлы сервера не трогаются, управление идет через RCON, а пользователи, роли, права и аудит хранятся в Postgres.
 
-Проект сделан так, чтобы не трогать мир Minecraft напрямую. Панель управляет сервером через RCON, хранит пользователей и права в Postgres, а `data/` с миром, логами и runtime-файлами не попадает в GitHub.
+## Что внутри
 
-## Что умеет
+- Telegram Mini App с авторизацией по Telegram `initData`.
+- Telegram-бот для входа в панель, статуса сервера и заявок.
+- FastAPI backend с проверкой прав на каждое действие.
+- React + TypeScript frontend, адаптированный под Telegram WebView.
+- Postgres-схема `mc_panel` для пользователей, ролей, точечных прав, заявок и аудита.
+- Allowlist RCON-команд вместо свободного доступа к консоли.
+- HTTPS через Caddy и Let's Encrypt.
 
-- Авторизация Mini App по Telegram `initData`.
-- Доступ к боту и панели по `telegram_user_id`.
+## Возможности
+
+- Доступ к панели и боту по `telegram_user_id`.
 - Роли: `owner`, `admin`, `moderator`, `player`, `viewer`.
-- Точечные права поверх ролей, например только `minecraft.command.tp.player_to_player`.
+- Точечные права поверх ролей, например только телепорт или только whitelist.
+- Защита от случайного удаления последнего активного `owner`.
 - Привязка Telegram-пользователя к Minecraft-нику.
-- Online/offline статус игроков по RCON `list`.
-- Одобрение и отклонение заявок игроков из вкладки `Настройки`.
-- Dropdown игроков для teleport-команд, если игроки онлайн.
-- Whitelist, kick, ban, pardon, tp, gamemode, time, weather, save.
-- Аудит действий в Postgres.
-- HTTPS для `panel.r3dbad.ru` через Caddy и Let's Encrypt.
+- Online/offline статус игроков через RCON `list`.
+- Одобрение и отклонение заявок игроков.
+- Whitelist manager.
+- Команды: broadcast, kick, ban, pardon, whitelist, op/deop, tp, gamemode, time, weather, difficulty, save.
+- Dropdown онлайн-игроков для команд, где нужен ник.
+- Audit log действий.
+- Отдельный интерфейс для разных ролей и прав.
 
 ## Архитектура
 
@@ -25,20 +34,20 @@ Telegram Bot
     |
     | opens Mini App
     v
-panel.r3dbad.ru
+https://panel.example.com
     |
     v
 Caddy HTTPS reverse proxy
     |
     v
-panel-web Nginx + React
+panel-web: Nginx + React
     |
     | /api/*
     v
-panel-api FastAPI
+panel-api: FastAPI
     |             |
     |             v
-    |         Postgres mc_panel schema
+    |         Postgres schema mc_panel
     |
     v
 Minecraft RCON
@@ -46,13 +55,13 @@ Minecraft RCON
 
 ## Стек
 
-- Backend: Python, FastAPI, asyncpg, aiogram, built-in RCON client.
+- Backend: Python, FastAPI, asyncpg, aiogram.
 - Frontend: React, TypeScript, Vite, lucide-react.
-- Database: Postgres, отдельная схема `mc_panel`.
+- Database: Postgres.
 - HTTPS: Caddy.
 - Runtime: Docker Compose.
 
-## Структура
+## Структура проекта
 
 ```text
 backend/
@@ -65,117 +74,123 @@ frontend/
 caddy/
   Caddyfile            HTTPS reverse proxy
 docs/
-  https-domain.md      домен и HTTPS
-  run-after-domain.md  запуск после настройки домена
-docker-compose.yml        существующий Minecraft server
+  cloudflared-test.md           quick tunnel test
+  local-uvicorn-cloudflared.md  local dev test
+  https-domain.md               domain and HTTPS guide
+  run-after-domain.md           production run guide
+docker-compose.yml        example Minecraft service
 docker-compose.panel.yml  API, bot, web
 docker-compose.https.yml  Caddy HTTPS
 ```
 
-## Важно про GitHub
+## Что не должно попадать в Git
 
-В GitHub не должны попадать:
+- Minecraft world data: `data/`, `world/`, `logs/`, `server.properties`, `playerdata`.
+- Secrets: `.env`, `.env.panel`.
+- Build artifacts: `frontend/dist/`, `node_modules/`, Python/TypeScript caches.
 
-- `data/` с миром Minecraft, playerdata, логами и `server.properties`;
-- `.env` и `.env.panel`;
-- `node_modules/`;
-- `frontend/dist/`;
-- Python и TypeScript кэши.
+Проверь [.gitignore](.gitignore) перед публикацией репозитория.
 
-Это уже закрыто в [.gitignore](.gitignore).
+## Требования
 
-## Быстрый запуск на сервере
+- Сервер с Docker и Docker Compose.
+- Уже работающий Minecraft-сервер с включенным RCON.
+- Postgres, доступный backend-контейнеру.
+- Telegram bot token от [@BotFather](https://t.me/BotFather).
+- Домен или поддомен для Mini App, например `panel.example.com`.
 
-Команды выполняются из папки проекта на сервере, где уже находится текущий `docker-compose.yml` Minecraft-сервера.
+Для локального теста без домена можно использовать Cloudflare Quick Tunnel: [docs/cloudflared-test.md](docs/cloudflared-test.md).
 
-Для временного теста без домена и Caddy можно использовать Cloudflare Quick Tunnel: [docs/cloudflared-test.md](docs/cloudflared-test.md).
+## Быстрый production-запуск
 
-Для локальной разработки без Docker панели: [docs/local-uvicorn-cloudflared.md](docs/local-uvicorn-cloudflared.md).
+Команды ниже выполняются на сервере из папки проекта.
 
-### 1. Настроить DNS
+### 1. Настрой DNS
 
-DNS-запись:
+Создай A-запись для панели:
 
 ```text
 Type: A
 Name: panel
-Value: 202.49.176.99
+Value: YOUR_SERVER_PUBLIC_IP
 ```
 
-Проверка:
+Пример проверки:
 
 ```bash
-nslookup panel.r3dbad.ru 1.1.1.1
+nslookup panel.example.com 1.1.1.1
 ```
 
-В ответе должен быть IP сервера.
+В ответе должен быть публичный IP твоего сервера.
 
-### 2. Создать `.env.panel`
+### 2. Подготовь `.env.panel`
 
 ```bash
 cp .env.panel.example .env.panel
 nano .env.panel
 ```
 
-Минимально:
+Минимальный набор:
 
 ```env
-PANEL_DOMAIN=panel.r3dbad.ru
-WEB_APP_URL=https://panel.r3dbad.ru
-DATABASE_URL=postgresql://user:password@host:5432/dbname
+PANEL_DOMAIN=panel.example.com
+WEB_APP_URL=https://panel.example.com
+DATABASE_URL=postgresql://postgres_user:postgres_password@postgres_host:5432/postgres_db
 BOT_TOKEN=123456789:replace_me
-RCON_PASSWORD=your_current_rcon_password
+RCON_HOST=minecraft
 RCON_PORT=25575
-CORS_ORIGINS=https://panel.r3dbad.ru
+RCON_PASSWORD=your_rcon_password
+CORS_ORIGINS=https://panel.example.com
 ```
 
-`RCON_PASSWORD` должен совпадать с паролем текущего Minecraft-сервера.
+Важно:
 
-Если Postgres находится на хосте, а не в Docker, `localhost` внутри контейнера не подойдет. Используй IP/hostname, доступный контейнеру.
+- `WEB_APP_URL` должен быть HTTPS URL панели, а не команда запуска tunnel.
+- `RCON_PASSWORD` должен совпадать с паролем в Minecraft `server.properties`.
+- Если Postgres работает на хосте, `localhost` внутри Docker-контейнера обычно не подойдет. Используй hostname/IP, доступный контейнеру.
+- Если Minecraft RCON опубликован на хосте, укажи доступный `RCON_HOST`.
 
-### 3. Открыть порты
+### 3. Открой порты
+
+Для Caddy и Let's Encrypt нужны 80/443:
 
 ```bash
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 ```
 
-### 4. Создать таблицы
+### 4. Создай таблицы Postgres
 
 ```bash
 export $(grep -v '^#' .env.panel | xargs)
 psql "$DATABASE_URL" -f backend/migrations/001_init.sql
 ```
 
-### 5. Назначить первого owner
+Миграция создает схему `mc_panel`, роли, права и allowlist RCON-команд.
 
-Узнай свой Telegram ID через бота или стороннего Telegram ID бота, затем:
+### 5. Назначь первого owner
 
-```bash
-psql "$DATABASE_URL"
-```
+Узнай свой Telegram ID через команду `/id` в боте или через любого Telegram ID бота.
 
-Вставь SQL, заменив `123456789` на свой Telegram ID:
+Затем выполни SQL, заменив `YOUR_TELEGRAM_ID`:
 
 ```sql
 WITH u AS (
     INSERT INTO mc_panel.users (telegram_user_id, telegram_username, first_name, status)
-    VALUES (123456789, 'r3dbad', 'Owner', 'active')
+    VALUES (YOUR_TELEGRAM_ID, 'owner_username', 'Owner', 'active')
     ON CONFLICT (telegram_user_id) DO UPDATE SET status = 'active'
     RETURNING id
 )
 INSERT INTO mc_panel.user_roles (user_id, role_id)
-SELECT u.id, r.id FROM u, mc_panel.roles r WHERE r.key = 'owner'
+SELECT u.id, r.id
+FROM u
+JOIN mc_panel.roles r ON r.key = 'owner'
 ON CONFLICT DO NOTHING;
 ```
 
-Выйти:
+### 6. Запусти панель
 
-```sql
-\q
-```
-
-### 6. Запустить панель
+Если основной `docker-compose.yml` содержит Minecraft-сервис и `docker-compose.panel.yml` ссылается на него, запускай так:
 
 ```bash
 docker compose \
@@ -185,7 +200,18 @@ docker compose \
   up -d --build panel-api panel-bot panel-web panel-caddy
 ```
 
-### 7. Проверить логи
+Minecraft-сервис не будет пересоздан, если ты не укажешь его имя в конце команды.
+
+Если панель полностью независима от Minecraft compose, можно использовать только panel/https compose:
+
+```bash
+docker compose \
+  -f docker-compose.panel.yml \
+  -f docker-compose.https.yml \
+  up -d --build
+```
+
+### 7. Проверь логи
 
 ```bash
 docker compose \
@@ -195,68 +221,91 @@ docker compose \
   logs -f panel-caddy panel-api panel-bot panel-web
 ```
 
-### 8. Проверить в браузере
+### 8. Проверь доступность
 
 ```text
-https://panel.r3dbad.ru
-https://panel.r3dbad.ru/api/healthz
+https://panel.example.com
+https://panel.example.com/api/healthz
 ```
 
-### 9. Открыть Telegram-бота
+### 9. Открой Telegram-бота
 
-Отправь:
+Отправь боту:
 
 ```text
 /start
 ```
 
-Если owner назначен правильно, бот покажет кнопку Mini App.
+Если `owner` назначен правильно, бот покажет кнопку Mini App.
 
-Команды бота:
+## Команды бота
 
 ```text
-/start   открыть Mini App
-/panel   получить кнопку панели
-/status  статус Minecraft
-/players игроки онлайн
-/id      показать Telegram ID
-/help    список команд
+/start                 открыть Mini App
+/panel                 получить кнопку панели
+/status                статус Minecraft
+/players               игроки онлайн
+/requests              новые заявки
+/approve <telegram_id> одобрить заявку
+/reject <telegram_id>  отклонить заявку
+/id                    показать Telegram ID
+/help                  список команд
 ```
 
-## Права
+## Модель прав
 
-Права хранятся в таблице `mc_panel.permissions`.
+Права хранятся в `mc_panel.permissions`, роли связываются с правами через `mc_panel.role_permissions`.
 
-Примеры:
+Примеры прав:
 
 ```text
-minecraft.status.view
-minecraft.players.view
+minecraft.status.read
+minecraft.whitelist.read
 minecraft.whitelist.write
+minecraft.ops.write
+minecraft.command.say
 minecraft.command.kick
+minecraft.command.ban
 minecraft.command.tp.self_to_player
 minecraft.command.tp.player_to_self
 minecraft.command.tp.player_to_player
+minecraft.command.gamemode
+minecraft.command.time
+minecraft.command.weather
+minecraft.command.difficulty
+minecraft.command.save
 minecraft.command.raw
 users.manage
 roles.manage
+audit.read
 ```
 
-Роли дают набор прав, но конкретному пользователю можно выдать или запретить отдельное право через `mc_panel.user_permission_overrides`.
+Точечные overrides хранятся в `mc_panel.user_permission_overrides`. Через Mini App можно увидеть effective-права пользователя, выдать право, запретить право или сбросить override.
 
 ## Безопасность
 
 - Mini App запросы подписываются Telegram `initData`.
-- Backend проверяет Telegram подпись через `BOT_TOKEN`.
+- Backend проверяет подпись через `BOT_TOKEN`.
 - UI скрывает недоступные действия, но финальная проверка всегда на backend.
-- RCON-команды выполняются по allowlist из таблицы `mc_panel.minecraft_commands`.
+- RCON-команды выполняются только по allowlist из `mc_panel.minecraft_commands`.
 - Опасные команды требуют подтверждения.
-- Все действия пишутся в `mc_panel.command_executions` и `mc_panel.audit_log`.
-- Сырой RCON доступен только через критическое право `minecraft.command.raw`.
+- Действия пишутся в `mc_panel.command_executions` и `mc_panel.audit_log`.
+- Сырой RCON должен оставаться только у доверенных owner/admin.
+- Последнего активного `owner` нельзя случайно заблокировать или лишить роли через API.
 
 ## Полезные команды
 
-Перезапуск панели:
+Пересобрать и перезапустить только панель:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.panel.yml \
+  -f docker-compose.https.yml \
+  up -d --build panel-api panel-bot panel-web panel-caddy
+```
+
+Перезапустить панель без пересборки:
 
 ```bash
 docker compose \
@@ -266,7 +315,7 @@ docker compose \
   restart panel-api panel-bot panel-web panel-caddy
 ```
 
-Остановить только панель, не трогая Minecraft:
+Остановить панель, не трогая Minecraft:
 
 ```bash
 docker compose \
@@ -276,7 +325,7 @@ docker compose \
   stop panel-api panel-bot panel-web panel-caddy
 ```
 
-Проверить API локально на сервере:
+Проверить API на сервере:
 
 ```bash
 curl http://localhost:8000/healthz
@@ -285,34 +334,35 @@ curl http://localhost:8000/healthz
 Проверить HTTPS:
 
 ```bash
-curl https://panel.r3dbad.ru/api/healthz
+curl https://panel.example.com/api/healthz
 ```
 
 ## Troubleshooting
 
-`panel.r3dbad.ru` не открывается:
+Панель не открывается:
 
-- проверь DNS: `nslookup panel.r3dbad.ru 1.1.1.1`;
+- проверь DNS: `nslookup panel.example.com 1.1.1.1`;
 - проверь, что порты 80/443 открыты;
-- проверь, что Caddy запущен и порт 80/443 не занят другим nginx/apache.
+- проверь, что Caddy запущен и порт 80/443 не занят другим nginx/apache;
+- проверь `PANEL_DOMAIN` и `WEB_APP_URL` в `.env.panel`.
 
 Сертификат не выпускается:
 
-- домен должен указывать на сервер;
+- домен должен указывать на этот сервер;
 - Let's Encrypt должен видеть порт 80;
-- в `.env.panel` `PANEL_DOMAIN` должен быть `panel.r3dbad.ru`.
+- `PANEL_DOMAIN` должен совпадать с реальным доменом панели.
 
 API не подключается к Postgres:
 
 - проверь `DATABASE_URL`;
 - не используй `localhost`, если Postgres не в том же контейнере;
-- проверь доступ пользователя Postgres к схеме/БД.
+- проверь доступ пользователя Postgres к базе и схеме.
 
 RCON не работает:
 
-- проверь `RCON_PASSWORD`;
-- проверь, что Minecraft compose публикует RCON порт `25575`;
-- проверь `ENABLE_RCON=true` в Minecraft-конфиге.
+- проверь `RCON_HOST`, `RCON_PORT`, `RCON_PASSWORD`;
+- проверь, что Minecraft публикует RCON порт;
+- проверь `enable-rcon=true` в Minecraft `server.properties`.
 
 ## Локальная проверка разработки
 

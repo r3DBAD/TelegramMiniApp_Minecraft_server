@@ -74,4 +74,4 @@ https://something.trycloudflare.com/api/healthz
 - После смены URL обнови `.env.panel` и перезапусти `panel-bot`.
 - Для теста `docker-compose.https.yml` не нужен.
 - Для теста не нужно открывать порты 80/443.
-- Для продакшена лучше использовать `panel.r3dbad.ru` + Caddy.
+- Для продакшена лучше использовать свой домен, например `panel.example.com`, и Caddy.
