@@ -1500,9 +1500,18 @@ body {
 }
 
 .identity-line span {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: nowrap;
+  gap: 6px;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.identity-line span svg {
+  width: 16px;
+  height: 16px;
 }
 
 .identity-line svg,
@@ -2125,16 +2134,30 @@ body {
 }
 
 .user-choice-list button {
+  display: inline-grid;
+  grid-template-columns: 9px 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
   border-radius: 14px;
   min-height: 50px;
+  padding: 8px 9px;
+  overflow: hidden;
 }
 
-.mini-head,
 .user-avatar img,
 .whitelist-player img {
   width: 100%;
   height: 100%;
   border-radius: inherit;
+  image-rendering: pixelated;
+}
+
+.mini-head {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  object-fit: cover;
   image-rendering: pixelated;
 }
 
