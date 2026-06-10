@@ -1,17 +1,27 @@
-import { Switch } from "@mantine/core";
+import { Accordion, ActionIcon, Badge, Button, Group, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
 import {
-  Ban,
+  IconChevronRight,
+  IconFilter,
+  IconInbox,
+  IconKey,
+  IconLink,
+  IconPlus,
+  IconSearch,
+  IconShieldCheck,
+  IconTerminal2,
+  IconTrash,
+  IconUsers,
+  IconWorld
+} from "@tabler/icons-react";
+import { motion } from "framer-motion";
+import {
   CheckCircle2,
   Crown,
   FileClock,
   Gamepad2,
-  KeyRound,
-  Link,
   ListChecks,
   LockKeyhole,
-  MinusCircle,
   Shield,
-  Trash2,
   UserCog,
   UserPlus,
   Wifi,
@@ -139,12 +149,6 @@ export function UsersSettingsPanel({
     refreshPermissionState();
   }
 
-  async function clearPermission(user: UserListItem, permissionKey: string) {
-    await api(`/users/${user.id}/permissions/${encodeURIComponent(permissionKey)}`, { method: "DELETE" });
-    await reload();
-    refreshPermissionState();
-  }
-
   async function setMinecraftProfile(user: UserListItem) {
     const username = (
       minecraftNames[user.id] ||
@@ -162,12 +166,12 @@ export function UsersSettingsPanel({
   }
 
   return (
-    <section className="user-list">
+    <motion.section className="user-list" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
       <div className="section-head">
         <div>
-          <p className="eyebrow">Access control</p>
+          <p className="eyebrow">Players</p>
           <h2>
-            <UserCog size={18} /> Настройки доступа
+            <UserCog size={18} /> Игроки
           </h2>
         </div>
         <span>
@@ -223,7 +227,6 @@ export function UsersSettingsPanel({
               grantRole={grantRole}
               revokeRole={revokeRole}
               setPermission={setPermission}
-              clearPermission={clearPermission}
               setMinecraftProfile={setMinecraftProfile}
             />
           )}
@@ -232,7 +235,7 @@ export function UsersSettingsPanel({
         <WhitelistManager whitelist={whitelist} canManageWhitelist={canManageWhitelist} reload={reload} />
         {canReadAudit && <AuditLog events={auditEvents} />}
       </div>
-    </section>
+    </motion.section>
   );
 }
 
@@ -246,11 +249,14 @@ function AccessRequestInbox({ requests, users, setStatus }: AccessRequestInboxPr
   if (requests.length === 0) {
     return (
       <section className="request-inbox quiet">
-        <div>
+        <div className="empty-inline empty-soft">
+          <IconInbox size={22} />
+          <div>
           <p className="eyebrow">Заявки</p>
           <h3>
             <ListChecks size={17} /> Очередь пустая
           </h3>
+          </div>
         </div>
         <span>Новые игроки появятся здесь</span>
       </section>
@@ -309,7 +315,6 @@ type SelectedUserSettingsProps = {
   grantRole: (user: UserListItem, roleKey: string) => Promise<void>;
   revokeRole: (user: UserListItem, roleKey: string) => Promise<void>;
   setPermission: (user: UserListItem, permissionKey: string, effect: "allow" | "deny") => Promise<void>;
-  clearPermission: (user: UserListItem, permissionKey: string) => Promise<void>;
   setMinecraftProfile: (user: UserListItem) => Promise<void>;
 };
 
@@ -327,10 +332,8 @@ function SelectedUserSettings({
   grantRole,
   revokeRole,
   setPermission,
-  clearPermission,
   setMinecraftProfile
 }: SelectedUserSettingsProps) {
-  const [roleSheetOpen, setRoleSheetOpen] = useState(false);
   const isOnline = Boolean(
     user.minecraft_username && onlinePlayers.some((player) => sameMinecraftName(player, user.minecraft_username!))
   );
@@ -346,15 +349,12 @@ function SelectedUserSettings({
     await setStatus(user, nextStatus);
   }
 
-  async function updateRole(roleKey: string, action: "grant" | "revoke") {
-    if (protectedSelf) return;
-    if (action === "revoke" && !confirm(`Снять роль ${roleKey} у ${name}?`)) return;
-    if (action === "grant") {
+  async function setPrimaryRole(roleKey: string | null) {
+    if (!roleKey || protectedSelf) return;
+    if (!user.roles.includes(roleKey)) {
       await grantRole(user, roleKey);
-    } else {
-      await revokeRole(user, roleKey);
     }
-    setRoleSheetOpen(false);
+    await Promise.all(roleOptions.filter((role) => role.key !== roleKey && user.roles.includes(role.key)).map((role) => revokeRole(user, role.key)));
   }
 
   async function updatePermission(permissionKey: string, effect: "allow" | "deny") {
@@ -363,18 +363,16 @@ function SelectedUserSettings({
     await setPermission(user, permissionKey, effect);
   }
 
-  async function removeOverride(permissionKey: string) {
-    if (protectedSelf) return;
-    await clearPermission(user, permissionKey);
-  }
-
   return (
     <article className={`user-detail-card user-status-${user.status}`}>
       <div className="settings-summary">
         <div className="selected-user-title">
-          <button className="user-avatar" onClick={() => setRoleSheetOpen(true)} aria-label="Открыть роли пользователя">
-            <img src={minecraftHead(avatarName, 64)} alt="" loading="lazy" />
-          </button>
+          <div className="player-avatar-wrap">
+            <div className="user-avatar">
+              <img src={minecraftHead(avatarName, 64)} alt="" loading="lazy" />
+            </div>
+            <span className={isOnline ? "presence-dot online" : "presence-dot"} />
+          </div>
           <div>
             <p className="eyebrow">{user.status === "pending" ? "Новая заявка" : "Пользователь"}</p>
             <h2>{name}</h2>
@@ -401,9 +399,9 @@ function SelectedUserSettings({
             <Gamepad2 size={16} />
             Minecraft профиль
           </div>
-          <label className="field-label">
-            Ник игрока
+          <label className="field-label compact-profile">
             <div className="profile-link">
+              <IconLink className="profile-input-icon" size={16} />
               <input
                 name={`minecraft-profile-${user.id}`}
                 value={minecraftName}
@@ -412,8 +410,8 @@ function SelectedUserSettings({
                 spellCheck={false}
                 onChange={(event) => setMinecraftName(event.target.value)}
               />
-              <button className="secondary-button" onClick={() => setMinecraftProfile(user)}>
-                <Link size={16} /> Привязать
+              <button className="secondary-button icon-chevron-button" onClick={() => setMinecraftProfile(user)} aria-label="Привязать Minecraft профиль">
+                <IconChevronRight size={17} />
               </button>
             </div>
           </label>
@@ -429,19 +427,14 @@ function SelectedUserSettings({
               <LockKeyhole size={15} /> Это твой owner-профиль. Самому себе нельзя забирать доступ, роли и права.
             </p>
           )}
-          <div className="settings-actions two-columns">
-            {user.status === "pending" ? (
-              <button className="primary-button" disabled={protectedSelf} onClick={() => updateStatus("active")}>
-                <CheckCircle2 size={16} /> Одобрить
-              </button>
-            ) : (
-              <button className="secondary-button" disabled>
-                <CheckCircle2 size={16} /> Активен
-              </button>
-            )}
-            <button className="danger-button" disabled={protectedSelf} onClick={() => updateStatus("blocked")}>
-              <XCircle size={16} /> Отклонить
-            </button>
+          <div className="settings-row">
+            <span>Доступ разрешён</span>
+            <Switch
+              checked={user.status === "active"}
+              disabled={protectedSelf}
+              color="green"
+              onChange={(event) => updateStatus(event.currentTarget.checked ? "active" : "blocked")}
+            />
           </div>
         </section>
 
@@ -452,12 +445,13 @@ function SelectedUserSettings({
                 <Crown size={16} />
                 Роль
               </div>
-              <div className="role-summary">
-                {user.roles.length > 0 ? user.roles.map((role) => <span className={`role-badge ${role}`} key={role}>{role}</span>) : <span className="role-badge player">no role</span>}
-              </div>
-              <button className="secondary-button role-sheet-button" onClick={() => setRoleSheetOpen(true)}>
-                <Crown size={16} /> Настроить роль
-              </button>
+              <Select
+                className={`role-select role-${primaryRole(user.roles)}`}
+                value={primaryRole(user.roles)}
+                disabled={protectedSelf}
+                data={roleOptions.map((role) => ({ value: role.key, label: role.label }))}
+                onChange={setPrimaryRole}
+              />
             </section>
 
             <section className="settings-block wide-field">
@@ -472,74 +466,24 @@ function SelectedUserSettings({
                 disabled={protectedSelf}
                 onAllow={(permissionKey) => updatePermission(permissionKey, "allow")}
                 onDeny={(permissionKey) => updatePermission(permissionKey, "deny")}
-                onClear={removeOverride}
               />
             </section>
           </>
         )}
       </div>
-      {roleSheetOpen && (
-        <div className="sheet-backdrop" role="presentation" onClick={() => setRoleSheetOpen(false)}>
-          <section className="confirm-sheet role-sheet" role="dialog" aria-modal="true" aria-labelledby="role-sheet-title" onClick={(event) => event.stopPropagation()}>
-            <div>
-              <p className="eyebrow">Roles</p>
-              <h2 id="role-sheet-title">Роли {name}</h2>
-            </div>
-            {protectedSelf && (
-              <p className="guard-note">
-                <LockKeyhole size={15} /> Свой owner-профиль защищен от самоблокировки.
-              </p>
-            )}
-            <RoleMatrix roles={user.roles} disabled={protectedSelf} onChange={updateRole} />
-          </section>
-        </div>
-      )}
     </article>
   );
 }
 
 const roleOptions = [
-  { key: "player", label: "Player", icon: Shield },
-  { key: "moderator", label: "Moderator", icon: Ban },
-  { key: "admin", label: "Admin", icon: Crown },
-  { key: "owner", label: "Owner", icon: Crown }
+  { key: "owner", label: "Owner" },
+  { key: "admin", label: "Admin" },
+  { key: "moderator", label: "Moderator" },
+  { key: "player", label: "Player" }
 ];
 
-function RoleMatrix({
-  roles,
-  disabled,
-  onChange
-}: {
-  roles: string[];
-  disabled: boolean;
-  onChange: (roleKey: string, action: "grant" | "revoke") => Promise<void>;
-}) {
-  return (
-    <div className="role-matrix">
-      {roleOptions.map((role) => {
-        const Icon = role.icon;
-        const enabled = roles.includes(role.key);
-        return (
-          <div
-            className={enabled ? "role-row enabled" : "role-row"}
-            key={role.key}
-          >
-            <span>
-              <Icon size={16} />
-              {role.label}
-            </span>
-            <Switch
-              aria-label={`${enabled ? "Снять" : "Выдать"} ${role.label}`}
-              checked={enabled}
-              disabled={disabled}
-              color="green"
-              onChange={() => onChange(role.key, enabled ? "revoke" : "grant")}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
+function primaryRole(roles: string[]): string {
+  return roleOptions.find((role) => roles.includes(role.key))?.key || "player";
 }
 
 function PermissionMatrix({
@@ -548,8 +492,7 @@ function PermissionMatrix({
   busy,
   disabled,
   onAllow,
-  onDeny,
-  onClear
+  onDeny
 }: {
   permissions: UserPermissionState[];
   fallback: PermissionDef[];
@@ -557,8 +500,8 @@ function PermissionMatrix({
   disabled: boolean;
   onAllow: (permissionKey: string) => Promise<void>;
   onDeny: (permissionKey: string) => Promise<void>;
-  onClear: (permissionKey: string) => Promise<void>;
 }) {
+  const [query, setQuery] = useState("");
   const rows: UserPermissionState[] = permissions.length
     ? permissions
     : fallback.map((permission) => ({
@@ -571,60 +514,107 @@ function PermissionMatrix({
     if (leftScore !== 0) return leftScore;
     return left.key.localeCompare(right.key);
   });
+  const filteredRows = sortedRows.filter((permission) => {
+    const haystack = `${permission.key} ${permission.description} ${permissionLabel(permission.key)}`.toLowerCase();
+    return haystack.includes(query.trim().toLowerCase());
+  });
+  const groups = groupPermissions(filteredRows);
 
   if (busy && rows.length === 0) {
     return <div className="notice">Загружаю права пользователя...</div>;
   }
 
   return (
-    <div className="permission-grid" aria-label="Права пользователя">
-      {sortedRows.map((permission) => {
-        const denied = permission.override_effect === "deny";
-        const allowedOverride = permission.override_effect === "allow";
-        const byRole = permission.role_keys.length > 0;
-        const stateLabel = denied
-          ? "Запрещено"
-          : allowedOverride
-            ? "Выдано вручную"
-            : byRole
-              ? `По роли: ${permission.role_keys.join(", ")}`
-              : permission.effective
-                ? "Активно"
-                : "Нет";
+    <Stack gap="sm" className="permission-list-wrap">
+      <TextInput
+        className="permission-search"
+        leftSection={<IconSearch size={16} />}
+        value={query}
+        placeholder="Найти право"
+        onChange={(event) => setQuery(event.currentTarget.value)}
+      />
+      <Accordion className="permission-accordion" multiple defaultValue={Object.keys(groups)}>
+        {Object.entries(groups).map(([group, groupRows]) => (
+          <Accordion.Item value={group} key={group}>
+            <Accordion.Control icon={permissionGroupIcon(group)}>{group}</Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap={6}>
+                {groupRows.map((permission) => (
+                  <PermissionRow
+                    key={permission.key}
+                    permission={permission}
+                    disabled={disabled}
+                    onAllow={onAllow}
+                    onDeny={onDeny}
+                  />
+                ))}
+              </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+        ))}
+      </Accordion>
+      {filteredRows.length === 0 && <div className="notice">Права не найдены.</div>}
+    </Stack>
+  );
+}
 
-        return (
-          <article
-            className={`permission-tile ${permission.effective ? "enabled" : ""} ${denied ? "denied" : ""}`}
-            key={permission.key}
-          >
-            <div className="permission-topline">
-              <span>
-                <KeyRound size={15} />
-                {permissionLabel(permission.key)}
-              </span>
-              <small className={`risk-badge ${permission.risk_level}`}>{riskLabels[permission.risk_level]}</small>
-            </div>
-            <p>{permission.description}</p>
-            <div className="permission-state">
-              <span>{stateLabel}</span>
-              {permission.override_effect && <small>override</small>}
-            </div>
-            <div className="permission-actions">
-              <button className="primary-button" disabled={disabled || allowedOverride} onClick={() => onAllow(permission.key)}>
-                Разрешить
-              </button>
-              <button className="danger-button" disabled={disabled || denied} onClick={() => onDeny(permission.key)}>
-                Запретить
-              </button>
-              <button className="secondary-button" disabled={disabled || !permission.override_effect} onClick={() => onClear(permission.key)}>
-                <MinusCircle size={14} /> Сбросить
-              </button>
-            </div>
-          </article>
-        );
-      })}
+function PermissionRow({
+  permission,
+  disabled,
+  onAllow,
+  onDeny
+}: {
+  permission: UserPermissionState;
+  disabled: boolean;
+  onAllow: (permissionKey: string) => Promise<void>;
+  onDeny: (permissionKey: string) => Promise<void>;
+}) {
+  return (
+    <div className={`permission-row ${permission.effective ? "enabled" : ""}`}>
+      <div className="permission-row-icon">{permissionIcon(permission.key)}</div>
+      <div className="permission-row-body">
+        <Text fw={720}>{permissionLabel(permission.key)}</Text>
+        <Text c="dimmed" size="xs" truncate>{permission.description}</Text>
+      </div>
+      <Badge className={`risk-badge ${permission.risk_level}`}>{riskLabels[permission.risk_level]}</Badge>
+      <Switch
+        checked={permission.effective}
+        disabled={disabled}
+        color="green"
+        onChange={(event) => (event.currentTarget.checked ? onAllow(permission.key) : onDeny(permission.key))}
+      />
     </div>
   );
+}
+
+function groupPermissions(rows: UserPermissionState[]): Record<string, UserPermissionState[]> {
+  return rows.reduce<Record<string, UserPermissionState[]>>((groups, permission) => {
+    const group = permissionGroup(permission.key);
+    groups[group] = [...(groups[group] || []), permission];
+    return groups;
+  }, {});
+}
+
+function permissionGroup(key: string): string {
+  if (key.includes("tp") || key.includes("kick") || key.includes("ban") || key.includes("whitelist") || key.includes("ops")) {
+    return "Игроки";
+  }
+  if (key.includes("weather") || key.includes("time") || key.includes("difficulty") || key.includes("save") || key.includes("gamemode")) {
+    return "Мир";
+  }
+  return "Команды";
+}
+
+function permissionGroupIcon(group: string) {
+  if (group === "Игроки") return <IconUsers size={16} />;
+  if (group === "Мир") return <IconWorld size={16} />;
+  return <IconTerminal2 size={16} />;
+}
+
+function permissionIcon(key: string) {
+  if (key.includes("whitelist") || key.includes("users") || key.includes("roles")) return <IconShieldCheck size={16} />;
+  if (key.includes("weather") || key.includes("time") || key.includes("difficulty")) return <IconWorld size={16} />;
+  return <IconKey size={16} />;
 }
 
 type WhitelistManagerProps = {
@@ -669,38 +659,63 @@ function WhitelistManager({ whitelist, canManageWhitelist, reload }: WhitelistMa
       </div>
 
       {canManageWhitelist && (
-        <label className="inline-add">
-          <input
+        <Group className="whitelist-add-row" gap="xs" wrap="nowrap">
+          <TextInput
             value={username}
             name="whitelistUsername"
-            placeholder="Minecraft ник"
+            placeholder="Добавить игрока"
             autoComplete="off"
             spellCheck={false}
-            onChange={(event) => setUsername(event.target.value)}
+            onChange={(event) => setUsername(event.currentTarget.value)}
           />
-          <button className="primary-button" onClick={addPlayer}>Добавить</button>
-        </label>
+          <Button variant="subtle" rightSection={<IconPlus size={16} />} onClick={addPlayer}>
+            Добавить
+          </Button>
+        </Group>
       )}
 
-      <div className="whitelist-grid">
+      <div className="whitelist-list">
         {entries.map((entry) => (
-          <div className="whitelist-chip" key={entry.uuid || entry.name}>
-            {entry.name ? <img src={minecraftHead(entry.name, 24)} alt="" loading="lazy" /> : <Gamepad2 size={15} />}
-            <span>{entry.name || entry.uuid}</span>
+          <article className="whitelist-card" key={entry.uuid || entry.name}>
+            <div className="whitelist-player">
+              {entry.name ? <img src={minecraftHead(entry.name, 40)} alt="" loading="lazy" /> : <Gamepad2 size={18} />}
+              <div>
+                <strong>{entry.name || entry.uuid}</strong>
+                <span>Доступ к серверу</span>
+              </div>
+            </div>
             {canManageWhitelist && entry.name && (
-              <button aria-label={`Убрать ${entry.name} из whitelist`} onClick={() => removePlayer(entry.name!)}>
-                <Trash2 size={14} />
-              </button>
+              <ActionIcon
+                className="whitelist-delete"
+                variant="subtle"
+                aria-label={`Убрать ${entry.name} из whitelist`}
+                onClick={() => removePlayer(entry.name!)}
+              >
+                <IconTrash size={18} />
+              </ActionIcon>
             )}
-          </div>
+          </article>
         ))}
-        {entries.length === 0 && <span className="empty-inline">Whitelist пуст</span>}
+        {entries.length === 0 && (
+          <div className="empty-inline empty-soft">
+            <IconInbox size={22} />
+            <span>Whitelist пуст</span>
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
 function AuditLog({ events }: { events: AuditEvent[] }) {
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const filteredEvents = events.filter((event) => {
+    const actor = event.first_name || event.telegram_username || "System";
+    const text = `${actor} ${auditActionLabel(event.action)} ${metadataPreview(event)}`.toLowerCase();
+    return text.includes(query.trim().toLowerCase());
+  });
+
   if (events.length === 0) {
     return (
       <section className="manager-section">
@@ -712,7 +727,10 @@ function AuditLog({ events }: { events: AuditEvent[] }) {
             </h3>
           </div>
         </div>
-        <div className="notice">Пока нет записей.</div>
+        <div className="empty-inline empty-soft">
+          <IconInbox size={22} />
+          <span>Пока нет записей</span>
+        </div>
       </section>
     );
   }
@@ -726,31 +744,54 @@ function AuditLog({ events }: { events: AuditEvent[] }) {
             <FileClock size={17} /> Журнал действий
           </h3>
         </div>
-        <span>{events.length}</span>
+        <Group gap={8}>
+          <ActionIcon variant="subtle" className="audit-filter-button" aria-label="Фильтр журнала" onClick={() => setFilterOpen((value) => !value)}>
+            <IconFilter size={18} />
+          </ActionIcon>
+          <span>{filteredEvents.length}</span>
+        </Group>
       </div>
-      <div className="audit-list">
-        {events.slice(0, 12).map((event) => (
-          <article className="audit-row" key={event.id}>
-            <div>
-              <strong>{auditActionLabel(event.action)}</strong>
-              <span>{event.first_name || event.telegram_username || "System"}</span>
+
+      {filterOpen && (
+        <TextInput
+          className="audit-filter-row"
+          leftSection={<IconSearch size={16} />}
+          value={query}
+          placeholder="Фильтр по игроку или действию"
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+      )}
+
+      <div className="audit-chat-list">
+        {filteredEvents.slice(0, 16).map((event) => {
+          const actor = event.first_name || event.telegram_username || "System";
+          const isSystem = actor === "System";
+          return (
+          <article className={isSystem ? "audit-chat-row system" : "audit-chat-row"} key={event.id}>
+            <time className="audit-chat-time" dateTime={event.created_at}>{formatTime(event.created_at)}</time>
+            <div className="audit-chat-message">
+              <strong>{actor}:</strong>
+              <span>{auditLine(event)}</span>
             </div>
-            <time dateTime={event.created_at}>{formatDate(event.created_at)}</time>
-            {metadataPreview(event) && <small>{metadataPreview(event)}</small>}
           </article>
-        ))}
+          );
+        })}
+        {filteredEvents.length === 0 && <div className="notice">По фильтру ничего не найдено.</div>}
       </div>
     </section>
   );
 }
 
-function formatDate(value: string): string {
+function formatTime(value: string): string {
   return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function auditLine(event: AuditEvent): string {
+  const details = metadataPreview(event);
+  return details ? `${auditActionLabel(event.action)} · ${details}` : auditActionLabel(event.action);
 }
 
 function metadataPreview(event: AuditEvent): string {

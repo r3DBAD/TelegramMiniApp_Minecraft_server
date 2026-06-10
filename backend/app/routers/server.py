@@ -1,4 +1,6 @@
 import json
+import re
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
@@ -28,17 +30,22 @@ async def status(
     _: CurrentUser = Depends(require_permission("minecraft.status.view")),
 ) -> dict:
     try:
+        started_at = time.perf_counter()
         response = await request.app.state.rcon.command("list")
+        latency_ms = round((time.perf_counter() - started_at) * 1000)
     except (RconError, OSError, TimeoutError) as exc:
         return _offline_status(str(exc))
 
     parsed = parse_list_response(response)
+    tps = await _read_tps(request)
     return {
         "online": True,
         "playersOnline": parsed["online"],
         "maxPlayers": parsed["max"],
         "players": parsed["players"],
         "raw": parsed["raw"],
+        "latencyMs": latency_ms,
+        "tps": tps,
     }
 
 
@@ -121,5 +128,21 @@ def _offline_status(error: str) -> dict:
         "maxPlayers": None,
         "players": [],
         "raw": "",
+        "latencyMs": None,
+        "tps": None,
         "error": error,
     }
+
+
+async def _read_tps(request: Request) -> float | None:
+    try:
+        response = await request.app.state.rcon.command("tps")
+    except (RconError, OSError, TimeoutError):
+        return None
+
+    matches = re.findall(r"\b(?:[0-9]|1[0-9]|20)(?:\.[0-9]+)?\b", response)
+    if not matches:
+        return None
+
+    values = [min(20.0, float(value)) for value in matches]
+    return round(values[0], 2)

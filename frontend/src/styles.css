@@ -1499,6 +1499,19 @@ body {
   z-index: 1;
 }
 
+.identity-line span {
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.identity-line svg,
+.user-badges svg,
+.role-badge svg {
+  display: block;
+  flex-shrink: 0;
+}
+
 .server-mark,
 .command-icon {
   border-color: rgba(0, 255, 133, 0.34);
@@ -1532,17 +1545,26 @@ body {
 }
 
 .tabs button {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 3px;
+  min-width: 0;
   min-height: 52px;
   padding: 6px;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.1;
+  text-align: center;
 }
 
 .tabs button svg {
+  display: block;
   width: 19px;
   height: 19px;
+  margin: 0 auto;
+  flex-shrink: 0;
 }
 
 .tabs button.active {
@@ -1995,13 +2017,23 @@ body {
 .command-chip-grid {
   grid-column: 1 / -1;
   width: 100%;
+  min-width: 0;
 }
 
 .command-chip {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   min-height: 214px;
   gap: 12px;
   padding: 14px;
+}
+
+.command-chip .mantine-Text-root,
+.command-chip .mantine-Stack-root,
+.command-chip .mantine-Group-root {
+  min-width: 0;
 }
 
 .chip-icon {
@@ -2050,6 +2082,467 @@ body {
   backdrop-filter: blur(18px);
 }
 
+/* Players tab refresh */
+.user-list {
+  --players-bg: #0f0f12;
+  --players-card: rgba(23, 25, 30, 0.8);
+  --players-card-soft: rgba(255, 255, 255, 0.045);
+  --players-line: rgba(255, 255, 255, 0.1);
+  --players-line-strong: rgba(45, 106, 79, 0.46);
+  --players-green: #2d6a4f;
+  --players-green-soft: rgba(45, 106, 79, 0.22);
+  --players-muted: #a4a7ad;
+  gap: 12px;
+}
+
+.user-list .section-head,
+.user-list .request-inbox,
+.user-list .manager-section,
+.user-list .user-detail-card,
+.user-list .settings-block,
+.user-list .access-overview {
+  border-color: var(--players-line);
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
+    var(--players-card);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px) saturate(1.12);
+}
+
+.user-list .section-head,
+.user-list .manager-section,
+.user-list .user-detail-card {
+  padding: 12px;
+}
+
+.user-list .eyebrow {
+  color: #74b493;
+}
+
+.user-admin-layout {
+  gap: 12px;
+}
+
+.user-choice-list button {
+  border-radius: 14px;
+  min-height: 50px;
+}
+
+.mini-head,
+.user-avatar img,
+.whitelist-player img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  image-rendering: pixelated;
+}
+
+.player-avatar-wrap {
+  position: relative;
+  width: 46px;
+  height: 46px;
+}
+
+.player-avatar-wrap .user-avatar {
+  width: 46px;
+  height: 46px;
+  border-color: rgba(45, 106, 79, 0.5);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(45, 106, 79, 0.18);
+}
+
+.presence-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 13px;
+  height: 13px;
+  border: 2px solid #111318;
+  border-radius: 999px;
+  background: #777b83;
+}
+
+.presence-dot.online {
+  background: #54d982;
+  box-shadow: 0 0 16px rgba(84, 217, 130, 0.55);
+}
+
+.user-detail-card {
+  gap: 12px;
+}
+
+.settings-summary {
+  gap: 10px;
+}
+
+.selected-user-title {
+  grid-template-columns: 46px minmax(0, 1fr);
+}
+
+.selected-user-title h2 {
+  font-size: 20px;
+}
+
+.user-meta span,
+.status-pill,
+.user-badges span,
+.settings-stats span {
+  min-height: 28px;
+  border-color: var(--players-line);
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.role-badge.owner {
+  border-color: rgba(235, 190, 93, 0.48);
+  color: #ffd782;
+  background: rgba(235, 190, 93, 0.12);
+}
+
+.role-badge.admin,
+.role-badge.moderator {
+  border-color: rgba(90, 163, 255, 0.42);
+  color: #a9d0ff;
+  background: rgba(90, 163, 255, 0.12);
+}
+
+.role-badge.player {
+  border-color: rgba(180, 185, 195, 0.22);
+  color: #d0d3d8;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.settings-grid {
+  gap: 10px;
+}
+
+.settings-block {
+  gap: 9px;
+  padding: 11px;
+}
+
+.settings-block-title {
+  color: #eef0f2;
+  font-size: 13px;
+}
+
+.compact-profile {
+  margin: 0;
+}
+
+.profile-link {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  border: 1px solid var(--players-line);
+  border-radius: 14px;
+  padding: 0 4px 0 10px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.profile-input-icon {
+  color: #86b89f;
+}
+
+.profile-link input {
+  min-height: 38px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.profile-link input:focus-visible {
+  outline: 0;
+}
+
+.icon-chevron-button {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px !important;
+  border-radius: 12px !important;
+  padding: 0 !important;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  border: 1px solid var(--players-line);
+  border-radius: 14px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.settings-row span {
+  color: #eef0f2;
+  font-weight: 720;
+}
+
+.user-list .mantine-Switch-track {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.user-list .mantine-Switch-input:checked + .mantine-Switch-track {
+  border-color: rgba(45, 106, 79, 0.75);
+  background: var(--players-green);
+}
+
+.role-select .mantine-Input-input,
+.permission-search .mantine-Input-input,
+.audit-filter-row .mantine-Input-input,
+.whitelist-add-row .mantine-Input-input {
+  border-radius: 14px;
+  border-color: var(--players-line);
+  min-height: 42px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.role-select.role-owner .mantine-Input-input {
+  border-color: rgba(235, 190, 93, 0.42);
+  color: #ffd782;
+}
+
+.role-select.role-admin .mantine-Input-input,
+.role-select.role-moderator .mantine-Input-input {
+  border-color: rgba(90, 163, 255, 0.38);
+  color: #a9d0ff;
+}
+
+.permission-list-wrap {
+  gap: 8px;
+}
+
+.permission-accordion .mantine-Accordion-item {
+  border: 1px solid var(--players-line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.permission-accordion .mantine-Accordion-item + .mantine-Accordion-item {
+  margin-top: 8px;
+}
+
+.permission-accordion .mantine-Accordion-control {
+  min-height: 42px;
+  color: #eef0f2;
+  font-weight: 780;
+}
+
+.permission-accordion .mantine-Accordion-panel {
+  padding: 0 8px 8px;
+}
+
+.permission-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.permission-row.enabled {
+  border-color: rgba(45, 106, 79, 0.36);
+  background: rgba(45, 106, 79, 0.13);
+}
+
+.permission-row-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  color: #8dc2a7;
+  background: rgba(45, 106, 79, 0.16);
+}
+
+.permission-row-body {
+  min-width: 0;
+}
+
+.permission-row .risk-badge {
+  min-height: 24px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.whitelist-add-row {
+  align-items: stretch;
+}
+
+.whitelist-add-row .mantine-TextInput-root {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.whitelist-add-row .mantine-Button-root {
+  flex: 0 0 auto;
+  min-height: 42px;
+  border-radius: 14px;
+  color: #b9e0c9;
+  background: transparent;
+}
+
+.whitelist-list {
+  display: grid;
+  gap: 8px;
+}
+
+.whitelist-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 58px;
+  border: 1px solid var(--players-line);
+  border-radius: 15px;
+  padding: 8px 8px 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.whitelist-player {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.whitelist-player img,
+.whitelist-player > svg {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(45, 106, 79, 0.16);
+}
+
+.whitelist-player div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.whitelist-player strong,
+.whitelist-player span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whitelist-player strong {
+  color: #f3f4f6;
+  font-size: 15px;
+}
+
+.whitelist-player span {
+  color: var(--players-muted);
+  font-size: 12px;
+}
+
+.whitelist-delete {
+  flex: 0 0 auto;
+  color: #aeb4bc;
+  border-radius: 12px;
+}
+
+.whitelist-delete:hover {
+  color: #f0f2f4;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.audit-filter-button {
+  color: #c5cad1;
+  border-radius: 12px;
+}
+
+.audit-filter-row {
+  margin-bottom: 8px;
+}
+
+.audit-chat-list {
+  display: grid;
+  gap: 7px;
+}
+
+.audit-chat-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-height: 38px;
+}
+
+.audit-chat-time {
+  color: #777d86;
+  font-size: 12px;
+  padding-top: 7px;
+}
+
+.audit-chat-message {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 14px;
+  padding: 8px 10px;
+  color: #f1f3f5;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.audit-chat-row.system .audit-chat-message {
+  color: #b0b5bd;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.audit-chat-message strong,
+.audit-chat-message span {
+  display: inline;
+  overflow-wrap: anywhere;
+}
+
+.audit-chat-message strong {
+  margin-right: 5px;
+}
+
+.empty-soft {
+  width: 100%;
+  min-height: 62px;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 15px;
+  padding: 12px;
+  color: #aeb4bc;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.empty-soft svg {
+  color: #74b493;
+}
+
+@media (max-width: 560px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-row {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+
+  .permission-row .risk-badge {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
 .role-row {
   border-radius: 14px;
 }

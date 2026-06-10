@@ -17,6 +17,8 @@ export type ServerStatus = {
   maxPlayers: number | null;
   players: string[];
   raw: string;
+  latencyMs?: number | null;
+  tps?: number | null;
   error?: string;
 };
 

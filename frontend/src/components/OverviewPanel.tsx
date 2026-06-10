@@ -47,6 +47,8 @@ export function OverviewPanel({ me, status, commands, output, onOutput }: Overvi
   const serverVersion = import.meta.env.VITE_MINECRAFT_VERSION || "Java Edition";
   const playersOnline = status?.playersOnline ?? 0;
   const maxPlayers = status?.maxPlayers ?? 0;
+  const tpsValue = status?.tps == null ? "N/A" : status.tps.toFixed(status.tps % 1 === 0 ? 0 : 1);
+  const latencyValue = status?.latencyMs == null ? "N/A" : `${status.latencyMs}ms`;
   const fillPercent = maxPlayers > 0 ? Math.min(100, Math.round((playersOnline / maxPlayers) * 100)) : 0;
   const isOnline = Boolean(
     minecraftUsername && status?.players.some((player) => sameMinecraftName(player, minecraftUsername))
@@ -113,8 +115,8 @@ export function OverviewPanel({ me, status, commands, output, onOutput }: Overvi
       </Card>
 
       <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
-        <MetricCard icon={<IconHeartRateMonitor size={19} />} label="TPS" value={status?.online ? "20.0" : "--"} tone="green" />
-        <MetricCard icon={<IconServer2 size={19} />} label="Latency" value={status?.online ? "<50ms" : "--"} tone="purple" />
+        <MetricCard icon={<IconHeartRateMonitor size={19} />} label="TPS" value={status?.online ? tpsValue : "N/A"} tone="green" />
+        <MetricCard icon={<IconServer2 size={19} />} label="Latency" value={status?.online ? latencyValue : "N/A"} tone="purple" />
         <MetricCard icon={<IconDeviceGamepad2 size={19} />} label="Ник" value={minecraftUsername || "Не привязан"} tone="purple" />
         <MetricCard icon={<IconUsers size={19} />} label="Твой статус" value={isOnline ? "Online" : "Offline"} tone={isOnline ? "green" : "red"} />
       </SimpleGrid>
