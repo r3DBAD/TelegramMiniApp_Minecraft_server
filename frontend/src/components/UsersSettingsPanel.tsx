@@ -193,6 +193,7 @@ export function UsersSettingsPanel({
                   onClick={() => setSelectedUserId(user.id)}
                 >
                   <span className={`mini-status ${user.status}`} aria-hidden="true" />
+                  <img className="mini-head" src={minecraftHead(user.minecraft_username || user.requested_minecraft_username || userLabel(user), 28)} alt="" loading="lazy" />
                   <strong>{userLabel(user)}</strong>
                   <small>{statusLabel(user.status)}</small>
                 </button>
@@ -328,11 +329,12 @@ function SelectedUserSettings({
   clearPermission,
   setMinecraftProfile
 }: SelectedUserSettingsProps) {
+  const [roleSheetOpen, setRoleSheetOpen] = useState(false);
   const isOnline = Boolean(
     user.minecraft_username && onlinePlayers.some((player) => sameMinecraftName(player, user.minecraft_username!))
   );
   const name = userLabel(user);
-  const avatarText = name.slice(0, 2).toUpperCase();
+  const avatarName = user.minecraft_username || user.requested_minecraft_username || name;
   const isSelf = user.id === currentUserId;
   const isOwner = user.roles.includes("owner");
   const protectedSelf = isSelf && isOwner;
@@ -351,6 +353,7 @@ function SelectedUserSettings({
     } else {
       await revokeRole(user, roleKey);
     }
+    setRoleSheetOpen(false);
   }
 
   async function updatePermission(permissionKey: string, effect: "allow" | "deny") {
@@ -368,13 +371,15 @@ function SelectedUserSettings({
     <article className={`user-detail-card user-status-${user.status}`}>
       <div className="settings-summary">
         <div className="selected-user-title">
-          <div className="user-avatar">{avatarText}</div>
+          <button className="user-avatar" onClick={() => setRoleSheetOpen(true)} aria-label="Открыть роли пользователя">
+            <img src={minecraftHead(avatarName, 64)} alt="" loading="lazy" />
+          </button>
           <div>
             <p className="eyebrow">{user.status === "pending" ? "Новая заявка" : "Пользователь"}</p>
             <h2>{name}</h2>
             <div className="user-badges">
               <span className={`status-dot ${user.status}`}>{statusLabel(user.status)}</span>
-              <span>{user.roles.join(", ") || "no role"}</span>
+              {user.roles.length > 0 ? user.roles.map((role) => <span className={`role-badge ${role}`} key={role}>{role}</span>) : <span>no role</span>}
             </div>
           </div>
         </div>
@@ -446,7 +451,12 @@ function SelectedUserSettings({
                 <Crown size={16} />
                 Роль
               </div>
-              <RoleMatrix roles={user.roles} disabled={protectedSelf} onChange={updateRole} />
+              <div className="role-summary">
+                {user.roles.length > 0 ? user.roles.map((role) => <span className={`role-badge ${role}`} key={role}>{role}</span>) : <span className="role-badge player">no role</span>}
+              </div>
+              <button className="secondary-button role-sheet-button" onClick={() => setRoleSheetOpen(true)}>
+                <Crown size={16} /> Настроить роль
+              </button>
             </section>
 
             <section className="settings-block wide-field">
@@ -467,6 +477,22 @@ function SelectedUserSettings({
           </>
         )}
       </div>
+      {roleSheetOpen && (
+        <div className="sheet-backdrop" role="presentation" onClick={() => setRoleSheetOpen(false)}>
+          <section className="confirm-sheet role-sheet" role="dialog" aria-modal="true" aria-labelledby="role-sheet-title" onClick={(event) => event.stopPropagation()}>
+            <div>
+              <p className="eyebrow">Roles</p>
+              <h2 id="role-sheet-title">Роли {name}</h2>
+            </div>
+            {protectedSelf && (
+              <p className="guard-note">
+                <LockKeyhole size={15} /> Свой owner-профиль защищен от самоблокировки.
+              </p>
+            )}
+            <RoleMatrix roles={user.roles} disabled={protectedSelf} onChange={updateRole} />
+          </section>
+        </div>
+      )}
     </article>
   );
 }
@@ -493,19 +519,18 @@ function RoleMatrix({
         const Icon = role.icon;
         const enabled = roles.includes(role.key);
         return (
-          <div className={enabled ? "role-row enabled" : "role-row"} key={role.key}>
+          <button
+            className={enabled ? "role-row enabled" : "role-row"}
+            key={role.key}
+            disabled={disabled}
+            onClick={() => onChange(role.key, enabled ? "revoke" : "grant")}
+          >
             <span>
               <Icon size={16} />
               {role.label}
             </span>
-            <button
-              className={enabled ? "danger-button" : "secondary-button"}
-              disabled={disabled}
-              onClick={() => onChange(role.key, enabled ? "revoke" : "grant")}
-            >
-              {enabled ? "Снять" : "Выдать"}
-            </button>
-          </div>
+            <span className="role-switch" aria-hidden="true"><i /></span>
+          </button>
         );
       })}
     </div>
@@ -655,7 +680,7 @@ function WhitelistManager({ whitelist, canManageWhitelist, reload }: WhitelistMa
       <div className="whitelist-grid">
         {entries.map((entry) => (
           <div className="whitelist-chip" key={entry.uuid || entry.name}>
-            <Gamepad2 size={15} />
+            {entry.name ? <img src={minecraftHead(entry.name, 24)} alt="" loading="lazy" /> : <Gamepad2 size={15} />}
             <span>{entry.name || entry.uuid}</span>
             {canManageWhitelist && entry.name && (
               <button aria-label={`Убрать ${entry.name} из whitelist`} onClick={() => removePlayer(entry.name!)}>
@@ -752,4 +777,8 @@ function normalizeMetadata(metadata: AuditEvent["metadata"]): Record<string, unk
   } catch {
     return {};
   }
+}
+
+function minecraftHead(username: string, size: number) {
+  return `https://minotar.net/helm/${encodeURIComponent(username)}/${size}.png`;
 }

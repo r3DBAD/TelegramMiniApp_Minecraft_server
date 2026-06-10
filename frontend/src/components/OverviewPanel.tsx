@@ -1,7 +1,8 @@
-import { CheckCircle2, CloudSun, Gamepad2, Save, Server, Shield, Sun, UserRound, Users } from "lucide-react";
+import { CheckCircle2, CloudSun, Copy, Gamepad2, Save, Server, Shield, Sun, UserRound, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { api } from "../lib/api";
+import { hapticImpact } from "../lib/haptics";
 import { sameMinecraftName } from "../lib/panel";
 import type { CommandDef, MeResponse, ServerStatus } from "../lib/types";
 
@@ -29,6 +30,11 @@ const quickActions: QuickAction[] = [
 export function OverviewPanel({ me, status, commands, output, onOutput }: OverviewPanelProps) {
   const [runningAction, setRunningAction] = useState<string | null>(null);
   const minecraftUsername = me?.user.minecraftUsername;
+  const serverAddress = import.meta.env.VITE_MINECRAFT_SERVER_ADDRESS || window.location.host;
+  const serverVersion = import.meta.env.VITE_MINECRAFT_VERSION || "Java Edition";
+  const playersOnline = status?.playersOnline ?? 0;
+  const maxPlayers = status?.maxPlayers ?? 0;
+  const fillPercent = maxPlayers > 0 ? Math.min(100, Math.round((playersOnline / maxPlayers) * 100)) : 0;
   const isOnline = Boolean(
     minecraftUsername && status?.players.some((player) => sameMinecraftName(player, minecraftUsername))
   );
@@ -41,6 +47,7 @@ export function OverviewPanel({ me, status, commands, output, onOutput }: Overvi
   );
 
   async function runQuickAction(action: QuickAction) {
+    hapticImpact(action.key === "save-all" ? "medium" : "light");
     setRunningAction(action.key);
     try {
       const result = await api<{ output: string }>(`/commands/${action.key}/execute`, {
@@ -55,16 +62,55 @@ export function OverviewPanel({ me, status, commands, output, onOutput }: Overvi
     }
   }
 
+  async function copyAddress() {
+    await navigator.clipboard?.writeText(serverAddress);
+    hapticImpact("light");
+    onOutput("Адрес скопирован");
+  }
+
   return (
     <section className="overview-panel">
-      <div className="status-card primary-status">
-        <div>
+      <div className="status-card primary-status server-orb-card">
+        <div className={status?.online ? "server-orb online" : "server-orb"} aria-hidden="true" />
+        <div className="server-status-copy">
           <span>Сервер</span>
           <strong className={status?.online ? "online-text" : "offline-text"}>
             {status?.online ? "Online" : "RCON offline"}
           </strong>
+          <small>{status?.online ? "RCON отвечает" : "Проверь RCON"}</small>
         </div>
         <Server size={24} />
+      </div>
+
+      <div className="server-copy-card">
+        <div>
+          <span>Адрес</span>
+          <strong>{serverAddress}</strong>
+          <small>{serverVersion}</small>
+        </div>
+        <button className="icon-button" onClick={copyAddress} aria-label="Скопировать адрес сервера">
+          <Copy size={18} />
+        </button>
+      </div>
+
+      <div className="player-progress-card">
+        <div className="panel-heading">
+          <h2>
+            <Users size={18} /> Игроки
+          </h2>
+          <span>
+            {playersOnline}/{status?.maxPlayers ?? "?"}
+          </span>
+        </div>
+        <div className="player-progress" aria-label={`Игроки онлайн ${playersOnline} из ${status?.maxPlayers ?? "?"}`}>
+          <span style={{ width: `${fillPercent}%` }} />
+        </div>
+        <div className="player-head-marquee">
+          {(status?.players || []).map((player) => (
+            <img key={player} src={minecraftHead(player, 48)} alt={player} title={player} loading="lazy" />
+          ))}
+          {status?.players.length === 0 && <span>Пусто</span>}
+        </div>
       </div>
 
       <div className="metric-grid">
@@ -139,4 +185,8 @@ export function OverviewPanel({ me, status, commands, output, onOutput }: Overvi
       )}
     </section>
   );
+}
+
+function minecraftHead(username: string, size: number) {
+  return `https://minotar.net/helm/${encodeURIComponent(username)}/${size}.png`;
 }

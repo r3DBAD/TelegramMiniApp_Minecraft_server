@@ -10,11 +10,31 @@ import { PanelTabs, type PanelTab } from "./components/PanelTabs";
 import { UsersSettingsPanel } from "./components/UsersSettingsPanel";
 import { usePanelData } from "./hooks/usePanelData";
 import { hasTelegramInitData } from "./lib/api";
+import { hapticNotify } from "./lib/haptics";
+
+type ToastState = {
+  text: string;
+  tone: "success" | "danger" | "info";
+};
 
 export default function App() {
   const [tab, setTab] = useState<PanelTab>("overview");
+  const [toast, setToast] = useState<ToastState | null>(null);
   const hasAuth = hasTelegramInitData();
   const { me, status, commands, users, permissionCatalog, accessRequests, auditEvents, whitelist, busy, error, output, setOutput, can, load } = usePanelData(hasAuth);
+
+  function notify(text: string, tone: ToastState["tone"] = "info") {
+    const isError = tone === "danger" || /ошибка|error|unavailable|denied|forbidden/i.test(text);
+    const finalTone = isError ? "danger" : tone;
+    setToast({ text: text.length > 90 ? "Команда выполнена" : text, tone: finalTone });
+    hapticNotify(finalTone === "danger" ? "error" : "success");
+    window.setTimeout(() => setToast(null), 2600);
+  }
+
+  function handleOutput(text: string) {
+    setOutput(text);
+    notify(text, "success");
+  }
 
   if (!hasAuth) {
     return (
@@ -54,15 +74,16 @@ export default function App() {
       <AppHeader me={me} status={status} busy={busy} onRefresh={load} />
 
       {error && <div className="notice danger">{error}</div>}
+      {toast && <div className={`toast ${toast.tone}`} role="status">{toast.text}</div>}
 
       <PanelTabs tab={tab} canManageUsers={can.has("users.manage")} onChange={setTab} />
 
       {tab === "overview" && (
-        <OverviewPanel me={me} status={status} commands={commands} output={output} onOutput={setOutput} />
+        <OverviewPanel me={me} status={status} commands={commands} output={output} onOutput={handleOutput} />
       )}
 
       {tab === "commands" && (
-        <CommandsPanel commands={commands} onlinePlayers={status?.players || []} onOutput={setOutput} />
+        <CommandsPanel commands={commands} onlinePlayers={status?.players || []} onOutput={handleOutput} />
       )}
 
       {tab === "users" && can.has("users.manage") && (

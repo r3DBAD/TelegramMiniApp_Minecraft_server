@@ -1417,6 +1417,498 @@ input::placeholder {
   }
 }
 
+/* Neon glass mobile control surface */
+:root {
+  --bg: #070a12;
+  --canvas: #0b132b;
+  --surface: rgba(13, 20, 38, 0.72);
+  --surface-soft: rgba(19, 29, 52, 0.68);
+  --surface-strong: rgba(26, 39, 68, 0.82);
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(0, 255, 133, 0.34);
+  --text: #ffffff;
+  --muted: #b0b6c4;
+  --green: #00ff85;
+  --green-soft: rgba(0, 255, 133, 0.13);
+  --blue: #00bfff;
+  --blue-soft: rgba(0, 191, 255, 0.14);
+  --violet: #7a5cff;
+  --violet-soft: rgba(122, 92, 255, 0.14);
+  --amber: #f4c95d;
+  --amber-soft: rgba(244, 201, 93, 0.14);
+  --red: #e53e3e;
+  --red-soft: rgba(229, 62, 62, 0.14);
+  --shadow: 0 18px 52px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% -8%, rgba(0, 191, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 92% 4%, rgba(122, 92, 255, 0.2), transparent 30%),
+    #070a12;
+}
+
+.shell {
+  padding-bottom: calc(94px + env(safe-area-inset-bottom));
+  background:
+    linear-gradient(180deg, rgba(11, 19, 43, 0.72), rgba(7, 10, 18, 0.96) 340px),
+    radial-gradient(circle at 8% 12%, rgba(0, 255, 133, 0.11), transparent 260px),
+    transparent;
+}
+
+.app-header,
+.notice,
+.empty-state,
+.panel,
+.metric,
+.status-card,
+.server-copy-card,
+.player-progress-card,
+.command-card,
+.quick-actions,
+.request-inbox,
+.manager-section,
+.user-detail-card,
+.settings-block {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025)),
+    rgba(10, 15, 28, 0.72);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+
+.app-header {
+  position: relative;
+  overflow: hidden;
+}
+
+.app-header::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(0, 255, 133, 0.12), transparent 28%, rgba(0, 191, 255, 0.1));
+  opacity: 0.55;
+}
+
+.app-title,
+.header-status,
+.identity-line {
+  position: relative;
+  z-index: 1;
+}
+
+.server-mark,
+.command-icon {
+  border-color: rgba(0, 255, 133, 0.34);
+  color: var(--green);
+  background: linear-gradient(145deg, rgba(0, 255, 133, 0.18), rgba(0, 191, 255, 0.08));
+  box-shadow: 0 0 22px rgba(0, 255, 133, 0.14);
+}
+
+.app-title h1 {
+  font-family: "Aptos", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(28px, 7vw, 38px);
+  letter-spacing: 0;
+}
+
+.tabs {
+  position: fixed;
+  left: 50%;
+  right: auto;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  top: auto;
+  z-index: 40;
+  width: min(520px, calc(100% - 24px));
+  transform: translateX(-50%);
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(10, 15, 28, 0.74);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(22px) saturate(1.2);
+}
+
+.tabs button {
+  display: grid;
+  gap: 3px;
+  min-height: 52px;
+  padding: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tabs button svg {
+  width: 19px;
+  height: 19px;
+}
+
+.tabs button.active {
+  border-color: rgba(0, 255, 133, 0.42);
+  color: #ecfff5;
+  background: linear-gradient(180deg, rgba(0, 255, 133, 0.18), rgba(0, 191, 255, 0.08));
+  box-shadow: inset 0 0 22px rgba(0, 255, 133, 0.08);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  top: calc(12px + env(safe-area-inset-top));
+  z-index: 60;
+  width: min(520px, calc(100% - 28px));
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #ffffff;
+  background: rgba(10, 15, 28, 0.84);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
+}
+
+.toast.success {
+  border-color: rgba(0, 255, 133, 0.42);
+}
+
+.toast.danger {
+  border-color: rgba(229, 62, 62, 0.52);
+}
+
+.server-orb-card {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 28px;
+  align-items: center;
+}
+
+.server-orb {
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(229, 62, 62, 0.42);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, #ffb7b7, var(--red) 42%, rgba(229, 62, 62, 0.3) 68%);
+  box-shadow: 0 0 28px rgba(229, 62, 62, 0.24);
+}
+
+.server-orb.online {
+  border-color: rgba(0, 255, 133, 0.5);
+  background: radial-gradient(circle at 35% 28%, #d7ffe9, var(--green) 42%, rgba(0, 255, 133, 0.28) 68%);
+  box-shadow: 0 0 32px rgba(0, 255, 133, 0.34);
+  animation: pulseLamp 1.8s ease-in-out infinite;
+}
+
+.server-status-copy small,
+.server-copy-card small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.server-copy-card,
+.player-progress-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.server-copy-card {
+  grid-template-columns: minmax(0, 1fr) 46px;
+  align-items: center;
+}
+
+.server-copy-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.server-copy-card strong {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-progress {
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.player-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), var(--blue));
+  box-shadow: 0 0 18px rgba(0, 255, 133, 0.36);
+}
+
+.player-head-marquee {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.player-head-marquee img,
+.mini-head,
+.whitelist-chip img {
+  image-rendering: pixelated;
+  border-radius: 8px;
+}
+
+.player-head-marquee img {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.command-list {
+  grid-template-columns: 1fr;
+}
+
+.command-list > .section-head,
+.command-toolbar,
+.quick-command-rail,
+.command-history,
+.empty-inline,
+.sheet-backdrop {
+  grid-column: 1 / -1;
+}
+
+.command-toolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 8;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(10, 15, 28, 0.64);
+  backdrop-filter: blur(18px);
+}
+
+.search-field {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px);
+}
+
+.command-card {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+  contain-intrinsic-size: 156px;
+}
+
+.command-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(0, 255, 133, 0.24);
+  border-radius: 8px;
+}
+
+.command-title {
+  display: grid;
+  gap: 8px;
+}
+
+.command-title h2 {
+  font-size: 15px;
+}
+
+.command-main p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 12px;
+}
+
+.command-fields {
+  grid-column: 2 / -1;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+}
+
+.compact-run {
+  align-self: start;
+  min-width: 70px;
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.command-history {
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.chat-line {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-line p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-line.system p {
+  color: #bfffd9;
+}
+
+.user-avatar {
+  padding: 0;
+  overflow: hidden;
+  appearance: none;
+}
+
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.mini-head {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.role-summary,
+.user-badges {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.role-badge {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #dce4f4 !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+.role-badge.owner {
+  border-color: rgba(244, 201, 93, 0.45) !important;
+  color: #ffe8a3 !important;
+  background: rgba(244, 201, 93, 0.16) !important;
+}
+
+.role-badge.admin {
+  border-color: rgba(0, 191, 255, 0.42) !important;
+  color: #b9ecff !important;
+  background: var(--blue-soft) !important;
+}
+
+.role-badge.moderator {
+  border-color: rgba(122, 92, 255, 0.42) !important;
+  color: #d8d0ff !important;
+  background: var(--violet-soft) !important;
+}
+
+.role-sheet-button {
+  width: 100%;
+}
+
+.role-sheet {
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
+.role-row {
+  grid-template-columns: minmax(0, 1fr) 48px;
+  width: 100%;
+  min-height: 52px;
+  color: var(--text);
+  text-align: left;
+}
+
+.role-switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.role-switch i {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #ffffff;
+  transition: transform 160ms ease;
+}
+
+.role-row.enabled .role-switch {
+  background: linear-gradient(90deg, var(--green), var(--blue));
+}
+
+.role-row.enabled .role-switch i {
+  transform: translateX(18px);
+}
+
+.whitelist-chip img {
+  width: 24px;
+  height: 24px;
+}
+
+@keyframes pulseLamp {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+@media (min-width: 760px) {
+  .command-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 980px) {
+  .command-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .shell {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .tabs {
+    gap: 6px;
+  }
+
+  .command-card {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+  }
+
+  .command-fields {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

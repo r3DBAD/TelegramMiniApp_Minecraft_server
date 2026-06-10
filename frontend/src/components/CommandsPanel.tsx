@@ -1,8 +1,30 @@
-import { AlertTriangle, Command, Lock, Play, Search, Star } from "lucide-react";
+import {
+  AlertTriangle,
+  Ban,
+  Clock3,
+  CloudSun,
+  Command,
+  Crown,
+  Gamepad2,
+  Gauge,
+  Lock,
+  MapPin,
+  MessageSquare,
+  Play,
+  Save,
+  Search,
+  ShieldCheck,
+  ShieldX,
+  Star,
+  Terminal,
+  UserX
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import { useDeferredValue, useMemo, useState } from "react";
 
 import { api } from "../lib/api";
+import { hapticImpact } from "../lib/haptics";
 import { buildCommandParams, commandParamEntries, riskLabels } from "../lib/panel";
 import type { CommandDef } from "../lib/types";
 
@@ -14,6 +36,12 @@ type CommandsPanelProps = {
 
 type CommandValues = Record<string, Record<string, string>>;
 type RiskFilter = "all" | "safe" | "medium" | "danger";
+type HistoryItem = {
+  id: string;
+  source: "user" | "system";
+  text: string;
+  time: string;
+};
 
 export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPanelProps) {
   const [values, setValues] = useState<CommandValues>({});
@@ -22,6 +50,7 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set(JSON.parse(localStorage.getItem("mcPanelFavorites") || "[]") as string[]));
   const [recent, setRecent] = useState<string[]>(() => JSON.parse(localStorage.getItem("mcPanelRecent") || "[]") as string[]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [pendingCommand, setPendingCommand] = useState<CommandDef | null>(null);
   const deferredQuery = useDeferredValue(query);
   const available = commands.filter((command) => command.allowed).length;
@@ -45,6 +74,7 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
 
   async function execute(command: CommandDef) {
     if (!command.allowed) return;
+    hapticImpact(command.riskLevel === "critical" || command.riskLevel === "high" ? "heavy" : "light");
     if (command.confirmationRequired) {
       setPendingCommand(command);
       return;
@@ -58,6 +88,7 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
 
     const params = buildCommandParams(command, values[command.key] || {}, onlinePlayers);
     setRunning(command.key);
+    pushHistory("user", `${command.key} ${Object.values(params).join(" ")}`.trim());
 
     try {
       const result = await api<{ output: string }>(`/commands/${command.key}/execute`, {
@@ -65,9 +96,12 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
         body: JSON.stringify({ params, confirmed: true })
       });
       onOutput(result.output || "OK");
+      pushHistory("system", result.output || "OK");
       rememberRecent(command.key);
     } catch (err) {
-      onOutput(err instanceof Error ? err.message : "Ошибка команды");
+      const message = err instanceof Error ? err.message : "Ошибка команды";
+      onOutput(message);
+      pushHistory("system", message);
     } finally {
       setRunning(null);
       setPendingCommand(null);
@@ -93,6 +127,11 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
       localStorage.setItem("mcPanelRecent", JSON.stringify(next));
       return next;
     });
+  }
+
+  function pushHistory(source: HistoryItem["source"], text: string) {
+    const time = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(new Date());
+    setHistory((current) => [{ id: `${Date.now()}-${source}`, source, text, time }, ...current].slice(0, 8));
   }
 
   return (
@@ -129,6 +168,17 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
         </div>
       </div>
 
+      {history.length > 0 && (
+        <div className="command-history">
+          {history.map((item) => (
+            <div className={`chat-line ${item.source}`} key={item.id}>
+              <span>{item.time}</span>
+              <p>{item.source === "user" ? `Ты: ${item.text}` : `Система: ${item.text}`}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {(favorites.size > 0 || recent.length > 0) && (
         <div className="quick-command-rail">
           {[...favorites, ...recent.filter((key) => !favorites.has(key))].slice(0, 6).map((key) => {
@@ -152,6 +202,7 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
 
         return (
           <article className={`command-card risk-${command.riskLevel} ${!command.allowed ? "locked" : ""}`} key={command.key}>
+            <div className="command-icon">{commandIcon(command.key)}</div>
             <div className="command-main">
               <div className="command-title">
                 <h2>{command.title}</h2>
@@ -241,9 +292,9 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
               {needsOnlineSelect && onlinePlayers.length === 0 && <span className="field-hint">Нет игроков онлайн</span>}
             </div>
 
-            <button className="run-button" disabled={!canRun || running === command.key} onClick={() => execute(command)}>
+            <button className="run-button compact-run" disabled={!canRun || running === command.key} onClick={() => execute(command)}>
               {command.allowed ? <Play size={17} /> : <Lock size={17} />}
-              {running === command.key ? "Выполняю…" : command.allowed ? "Выполнить" : "Нет доступа"}
+              {running === command.key ? "..." : command.allowed ? "Run" : "Lock"}
             </button>
           </article>
         );
@@ -276,6 +327,28 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
       )}
     </section>
   );
+}
+
+const commandIcons: Array<[string, LucideIcon]> = [
+  ["say", MessageSquare],
+  ["kick", UserX],
+  ["ban", Ban],
+  ["pardon", ShieldCheck],
+  ["whitelist.add", ShieldCheck],
+  ["whitelist.remove", ShieldX],
+  ["op.", Crown],
+  ["tp.", MapPin],
+  ["gamemode", Gamepad2],
+  ["time", Clock3],
+  ["weather", CloudSun],
+  ["difficulty", Gauge],
+  ["save", Save],
+  ["raw", Terminal]
+];
+
+function commandIcon(commandKey: string) {
+  const Icon = commandIcons.find(([prefix]) => commandKey.startsWith(prefix))?.[1] || Command;
+  return <Icon size={19} />;
 }
 
 function setCommandValue(
