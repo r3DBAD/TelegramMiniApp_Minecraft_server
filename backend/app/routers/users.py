@@ -16,7 +16,7 @@ class UserStatusBody(BaseModel):
 
 
 class RoleBody(BaseModel):
-    roleKey: str = Field(pattern="^(owner|admin|moderator|player|viewer)$")
+    roleKey: str = Field(pattern="^admin$")
 
 
 class PermissionOverrideBody(BaseModel):
@@ -174,8 +174,8 @@ async def update_user_status(
         exists = await connection.fetchval("SELECT EXISTS (SELECT 1 FROM mc_panel.users WHERE id = $1)", user_id)
         if not exists:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-        if body.status == "blocked" and await _is_last_active_owner(connection, user_id):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot block the last active owner")
+        if body.status == "blocked" and await _is_last_active_admin(connection, user_id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot block the last active admin")
 
         if body.status == "active":
             username = await approve_user(connection, current_user.id, user_id)
@@ -184,6 +184,7 @@ async def update_user_status(
             username = None
         else:
             await connection.execute("UPDATE mc_panel.users SET status = 'pending' WHERE id = $1", user_id)
+            await connection.execute("DELETE FROM mc_panel.user_roles WHERE user_id = $1", user_id)
             await audit(connection, current_user.id, "users.status.update", "user", str(user_id), body.model_dump())
             username = None
 
@@ -202,9 +203,6 @@ async def grant_role(
 ) -> dict[str, str]:
     if user_id == current_user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change your own roles")
-    if body.roleKey == "owner" and "owner" not in current_user.roles:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owner can grant owner role")
-
     async with pool.acquire() as connection:
         target_exists = await connection.fetchval(
             """
@@ -233,12 +231,12 @@ async def revoke_role(
 ) -> dict[str, str]:
     if user_id == current_user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change your own roles")
-    if role_key == "owner" and "owner" not in current_user.roles:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owner can revoke owner role")
+    if role_key != "admin":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Role not found")
 
     async with pool.acquire() as connection:
-        if role_key == "owner" and await _is_last_active_owner(connection, user_id):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot revoke the last active owner")
+        if await _is_last_active_admin(connection, user_id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot revoke the last active admin")
         await connection.execute(
             """
             DELETE FROM mc_panel.user_roles ur
@@ -261,34 +259,8 @@ async def set_permission_override(
 ) -> dict[str, str]:
     if user_id == current_user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change your own permissions")
-    if body.permissionKey in {"roles.manage", "users.manage"} and "owner" not in current_user.roles:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owner can change critical user permissions")
+    raise HTTPException(status.HTTP_410_GONE, "Individual permission overrides are disabled; use status active/blocked")
 
-    async with pool.acquire() as connection:
-        result = await connection.execute(
-            """
-            INSERT INTO mc_panel.user_permission_overrides (
-                user_id, permission_id, effect, reason, created_by
-            )
-            SELECT $1, p.id, $3, $4, $5
-            FROM mc_panel.permissions p
-            WHERE p.key = $2
-            ON CONFLICT (user_id, permission_id)
-            DO UPDATE SET effect = EXCLUDED.effect,
-                          reason = EXCLUDED.reason,
-                          created_by = EXCLUDED.created_by,
-                          created_at = now()
-            """,
-            user_id,
-            body.permissionKey,
-            body.effect,
-            body.reason,
-            current_user.id,
-        )
-        await audit(connection, current_user.id, "users.permission.override", "user", str(user_id), body.model_dump())
-    if result.endswith("0"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Permission or user not found")
-    return {"status": "updated"}
 
 
 @router.delete("/{user_id}/permissions/{permission_key}")
@@ -300,24 +272,8 @@ async def clear_permission_override(
 ) -> dict[str, str]:
     if user_id == current_user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change your own permissions")
-    if permission_key in {"roles.manage", "users.manage"} and "owner" not in current_user.roles:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owner can change critical user permissions")
+    raise HTTPException(status.HTTP_410_GONE, "Individual permission overrides are disabled; use status active/blocked")
 
-    async with pool.acquire() as connection:
-        result = await connection.execute(
-            """
-            DELETE FROM mc_panel.user_permission_overrides upo
-            USING mc_panel.permissions p
-            WHERE upo.permission_id = p.id
-              AND upo.user_id = $1
-              AND p.key = $2
-            """,
-            user_id,
-            permission_key,
-        )
-        if not result.endswith("0"):
-            await audit(connection, current_user.id, "users.permission.clear", "user", str(user_id), {"permissionKey": permission_key})
-    return {"status": "cleared"}
 
 
 @router.put("/{user_id}/minecraft-profile")
@@ -334,7 +290,7 @@ async def set_minecraft_profile(
     return {"status": "updated"}
 
 
-async def _is_last_active_owner(connection: asyncpg.Connection, user_id: int) -> bool:
+async def _is_last_active_admin(connection: asyncpg.Connection, user_id: int) -> bool:
     row = await connection.fetchrow(
         """
         SELECT EXISTS (
@@ -343,18 +299,18 @@ async def _is_last_active_owner(connection: asyncpg.Connection, user_id: int) ->
             JOIN mc_panel.roles r ON r.id = ur.role_id
             JOIN mc_panel.users u ON u.id = ur.user_id
             WHERE ur.user_id = $1
-              AND r.key = 'owner'
+              AND r.key = 'admin'
               AND u.status = 'active'
-        ) AS is_owner,
+        ) AS is_admin,
         (
             SELECT count(*)
             FROM mc_panel.user_roles ur
             JOIN mc_panel.roles r ON r.id = ur.role_id
             JOIN mc_panel.users u ON u.id = ur.user_id
-            WHERE r.key = 'owner'
+            WHERE r.key = 'admin'
               AND u.status = 'active'
-        ) AS active_owner_count
+        ) AS active_admin_count
         """,
         user_id,
     )
-    return bool(row and row["is_owner"] and row["active_owner_count"] <= 1)
+    return bool(row and row["is_admin"] and row["active_admin_count"] <= 1)

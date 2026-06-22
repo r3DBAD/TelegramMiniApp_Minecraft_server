@@ -4,10 +4,13 @@ import {
   IconCloud,
   IconCopy,
   IconDeviceFloppy,
-  IconDeviceGamepad2,
+  IconExclamationCircle,
   IconHeartRateMonitor,
+  IconLock,
+  IconPlugConnected,
   IconServer2,
   IconSunHigh,
+  IconTerminal2,
   IconUsers
 } from "@tabler/icons-react";
 import { motion } from "framer-motion";
@@ -16,13 +19,13 @@ import type { ReactNode } from "react";
 
 import { api } from "../lib/api";
 import { hapticImpact } from "../lib/haptics";
-import { sameMinecraftName } from "../lib/panel";
-import type { CommandDef, MeResponse, ServerStatus } from "../lib/types";
+import type { AuditEvent, CommandDef, OpsResponse, ServerStatus } from "../lib/types";
 
 type OverviewPanelProps = {
-  me: MeResponse | null;
   status: ServerStatus | null;
   commands: CommandDef[];
+  ops: OpsResponse | null;
+  auditEvents: AuditEvent[];
   output: string;
   onOutput: (text: string) => void;
 };
@@ -40,9 +43,16 @@ const quickActions: QuickAction[] = [
   { key: "save-all", label: "Сохранить", icon: "save", params: {} }
 ];
 
-export function OverviewPanel({ me, status, commands, output, onOutput }: OverviewPanelProps) {
+const adminChecks = [
+  "TPS держится около 20, MSPT ниже 50",
+  "В ops только доверенные администраторы",
+  "Whitelist и заявки совпадают с реальным составом",
+  "Перед опасными командами выполнен save-all",
+  "Для лагов сначала diagnostics: spark/mspt/tps"
+];
+
+export function OverviewPanel({ status, commands, ops, auditEvents, output, onOutput }: OverviewPanelProps) {
   const [runningAction, setRunningAction] = useState<string | null>(null);
-  const minecraftUsername = me?.user.minecraftUsername;
   const serverAddress = import.meta.env.VITE_MINECRAFT_SERVER_ADDRESS || window.location.host;
   const serverVersion = import.meta.env.VITE_MINECRAFT_VERSION || "Java Edition";
   const playersOnline = status?.playersOnline ?? 0;
@@ -50,9 +60,12 @@ export function OverviewPanel({ me, status, commands, output, onOutput }: Overvi
   const tpsValue = status?.tps == null ? "N/A" : status.tps.toFixed(status.tps % 1 === 0 ? 0 : 1);
   const latencyValue = status?.latencyMs == null ? "N/A" : `${status.latencyMs}ms`;
   const fillPercent = maxPlayers > 0 ? Math.min(100, Math.round((playersOnline / maxPlayers) * 100)) : 0;
-  const isOnline = Boolean(
-    minecraftUsername && status?.players.some((player) => sameMinecraftName(player, minecraftUsername))
-  );
+  const operators = ops?.ops || [];
+  const highRiskCommands = commands.filter((command) => command.allowed && ["high", "critical"].includes(command.riskLevel)).length;
+  const recentCriticalActions = auditEvents.filter((event) => {
+    const action = event.action.toLowerCase();
+    return action.includes("command") || action.includes("whitelist") || action.includes("role") || action.includes("permission");
+  }).length;
   const availableQuickActions = useMemo(
     () =>
       quickActions
@@ -90,9 +103,9 @@ export function OverviewPanel({ me, status, commands, output, onOutput }: Overvi
           <Group gap="md">
             <div className={status?.online ? "server-orb online" : "server-orb"} aria-hidden="true" />
             <Stack gap={3}>
-              <Text c="dimmed" size="sm">Сервер</Text>
-              <Title order={1}>{status?.online ? "Online" : "RCON offline"}</Title>
-              <Text c="dimmed" size="xs">{status?.online ? "RCON отвечает" : "Проверь RCON доступ"}</Text>
+              <Text c="dimmed" size="sm">Оперативный статус</Text>
+              <Title order={1}>{status?.online ? "RCON online" : "RCON offline"}</Title>
+              <Text c="dimmed" size="xs">{status?.online ? "Команды и мониторинг доступны" : "Проверь RCON host/port/password"}</Text>
             </Stack>
           </Group>
           <Badge className={status?.online ? "neon-badge" : "danger-badge"}>{playersOnline}/{status?.maxPlayers ?? "?"}</Badge>
@@ -115,11 +128,28 @@ export function OverviewPanel({ me, status, commands, output, onOutput }: Overvi
       </Card>
 
       <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
-        <MetricCard icon={<IconHeartRateMonitor size={19} />} label="TPS" value={status?.online ? tpsValue : "N/A"} tone="green" />
-        <MetricCard icon={<IconServer2 size={19} />} label="Latency" value={status?.online ? latencyValue : "N/A"} tone="purple" />
-        <MetricCard icon={<IconDeviceGamepad2 size={19} />} label="Ник" value={minecraftUsername || "Не привязан"} tone="purple" />
-        <MetricCard icon={<IconUsers size={19} />} label="Твой статус" value={isOnline ? "Online" : "Offline"} tone={isOnline ? "green" : "red"} />
+        <MetricCard icon={<IconHeartRateMonitor size={19} />} label="TPS" value={status?.online ? tpsValue : "N/A"} tone={healthTone(status?.tps)} />
+        <MetricCard icon={<IconServer2 size={19} />} label="RCON latency" value={status?.online ? latencyValue : "N/A"} tone="purple" />
+        <MetricCard icon={<IconUsers size={19} />} label="Slots" value={maxPlayers ? `${playersOnline}/${maxPlayers}` : `${playersOnline}/?`} tone="purple" />
+        <MetricCard icon={<IconLock size={19} />} label="Operators" value={String(operators.length)} tone={operators.length > 3 ? "red" : "green"} />
       </SimpleGrid>
+
+      <Card className="glass-card admin-health-card">
+        <Group justify="space-between" mb="sm">
+          <Stack gap={2}>
+            <Text className="eyebrow">Admin focus</Text>
+            <Title order={2}>Что важно сейчас</Title>
+          </Stack>
+          <Badge className={highRiskCommands > 0 ? "danger-badge" : "neon-badge"}>
+            {highRiskCommands} high-risk
+          </Badge>
+        </Group>
+        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+          <AdminPulse icon={<IconPlugConnected size={18} />} label="RCON" value={status?.online ? "Готов" : "Нет связи"} danger={!status?.online} />
+          <AdminPulse icon={<IconExclamationCircle size={18} />} label="Аудит" value={`${recentCriticalActions} событий`} danger={recentCriticalActions > 10} />
+          <AdminPulse icon={<IconTerminal2 size={18} />} label="Каталог" value={`${commands.filter((command) => command.allowed).length} команд`} danger={commands.length === 0} />
+        </SimpleGrid>
+      </Card>
 
       <Card className="glass-card server-copy-card">
         <Stack gap={2}>
@@ -154,6 +184,24 @@ export function OverviewPanel({ me, status, commands, output, onOutput }: Overvi
         </Card>
       )}
 
+      <Card className="glass-card admin-runbook-card">
+        <Group justify="space-between" mb="sm">
+          <Stack gap={2}>
+            <Text className="eyebrow">Runbook</Text>
+            <Title order={2}>Админский чеклист</Title>
+          </Stack>
+          <IconCheck size={18} color="#00ff85" />
+        </Group>
+        <div className="admin-check-list">
+          {adminChecks.map((item) => (
+            <span key={item}>
+              <IconCheck size={14} />
+              {item}
+            </span>
+          ))}
+        </div>
+      </Card>
+
       {output && (
         <Card className="glass-card command-output-card">
           <Group gap="xs" mb="xs">
@@ -187,6 +235,31 @@ function MetricCard({
       <Text fw={850} size="lg" truncate>{value}</Text>
     </Card>
   );
+}
+
+function AdminPulse({
+  icon,
+  label,
+  value,
+  danger
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  danger: boolean;
+}) {
+  return (
+    <div className={danger ? "admin-pulse danger" : "admin-pulse"}>
+      {icon}
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function healthTone(tps?: number | null): "green" | "purple" | "red" {
+  if (tps == null) return "purple";
+  return tps >= 19 ? "green" : "red";
 }
 
 function quickIcon(icon: QuickAction["icon"]) {

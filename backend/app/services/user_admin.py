@@ -15,7 +15,7 @@ async def approve_user(
 
     await connection.execute("UPDATE mc_panel.users SET status = 'active' WHERE id = $1", user_id)
     await review_pending_requests(connection, actor_user_id, user_id, "approved")
-    await grant_role(connection, actor_user_id, user_id, "player")
+    await grant_admin_role(connection, actor_user_id, user_id)
 
     if requested_username:
         username = validate_minecraft_username(requested_username)
@@ -23,6 +23,15 @@ async def approve_user(
 
     await audit(connection, actor_user_id, "users.status.update", "user", str(user_id), {"status": "active"})
     return requested_username
+
+
+async def grant_admin_role(
+    connection: asyncpg.Connection,
+    actor_user_id: int,
+    user_id: int,
+) -> None:
+    await connection.execute("DELETE FROM mc_panel.user_roles WHERE user_id = $1", user_id)
+    await grant_role(connection, actor_user_id, user_id, "admin")
 
 
 async def reject_user(

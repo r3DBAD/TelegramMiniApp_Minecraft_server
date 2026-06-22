@@ -11,9 +11,9 @@ type PanelTabsProps = {
 
 export function PanelTabs({ tab, canManageUsers, onChange }: PanelTabsProps) {
   const items = [
-    { key: "overview" as const, label: "Обзор", icon: IconActivityHeartbeat, visible: true },
-    { key: "commands" as const, label: "Команды", icon: IconTerminal2, visible: true },
-    { key: "users" as const, label: "Игроки", icon: IconUsersGroup, visible: canManageUsers }
+    { key: "overview" as const, label: "Мониторинг", icon: IconActivityHeartbeat, visible: true },
+    { key: "commands" as const, label: "RCON", icon: IconTerminal2, visible: true },
+    { key: "users" as const, label: "Доступ", icon: IconUsersGroup, visible: canManageUsers }
   ];
 
   return (

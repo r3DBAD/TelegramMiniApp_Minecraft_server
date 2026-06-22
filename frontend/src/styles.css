@@ -2010,6 +2010,76 @@ body {
   color: var(--red);
 }
 
+.admin-health-card,
+.admin-runbook-card,
+.diagnostics-card {
+  grid-column: 1 / -1;
+}
+
+.admin-pulse {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: center;
+  min-height: 72px;
+  border: 1px solid rgba(0, 255, 133, 0.2);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(0, 255, 133, 0.07);
+}
+
+.admin-pulse svg {
+  grid-row: 1 / span 2;
+  color: var(--green);
+}
+
+.admin-pulse span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-pulse strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #f6fff9;
+}
+
+.admin-pulse.danger {
+  border-color: rgba(229, 62, 62, 0.3);
+  background: rgba(229, 62, 62, 0.08);
+}
+
+.admin-pulse.danger svg {
+  color: var(--red);
+}
+
+.admin-check-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.admin-check-list span {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 13px;
+  padding: 9px 10px;
+  color: #dbe7dc;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.admin-check-list svg {
+  flex-shrink: 0;
+  color: var(--green);
+  margin-top: 2px;
+}
+
 .half-action.mantine-Button-root,
 .chip-run.mantine-Button-root {
   border: 1px solid rgba(0, 255, 133, 0.28);
@@ -2307,6 +2377,32 @@ body {
   font-weight: 720;
 }
 
+.single-role-card {
+  display: grid;
+  gap: 5px;
+  min-height: 74px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.single-role-card.enabled {
+  border-color: rgba(45, 106, 79, 0.42);
+  background: rgba(45, 106, 79, 0.14);
+}
+
+.single-role-card strong {
+  color: #f3f4f6;
+  font-size: 18px;
+}
+
+.single-role-card span {
+  color: var(--players-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .user-list .mantine-Switch-track {
   border-color: rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.12);
@@ -2420,6 +2516,41 @@ body {
 .whitelist-list {
   display: grid;
   gap: 8px;
+}
+
+.manager-note {
+  color: var(--players-muted) !important;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ops-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ops-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 58px;
+  border: 1px solid rgba(235, 190, 93, 0.22);
+  border-radius: 15px;
+  padding: 8px 8px 8px 10px;
+  background: rgba(235, 190, 93, 0.055);
+}
+
+.ops-risk {
+  flex: 0 0 auto;
+  border: 1px solid rgba(229, 62, 62, 0.32);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #ffd7d7;
+  background: rgba(229, 62, 62, 0.12);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .whitelist-card {

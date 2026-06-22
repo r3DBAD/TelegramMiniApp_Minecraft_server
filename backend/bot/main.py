@@ -37,10 +37,13 @@ async def main() -> None:
 
         if user["status"] != "active":
             await message.answer(
-                "Заявка на доступ создана. Отправь владельцу свой Telegram ID:\n"
+                "Заявка на доступ создана. Отправь администратору свой Telegram ID:\n"
                 f"`{message.from_user.id}`",
                 parse_mode="Markdown",
             )
+            return
+        if not await has_permission(pool, user["id"], "system.view"):
+            await message.answer("Доступ к админ-панели не выдан.")
             return
 
         await send_panel_button(bot, message)
@@ -59,7 +62,7 @@ async def main() -> None:
             "/status - статус Minecraft\n"
             "/players - игроки онлайн\n"
             "/requests - новые заявки\n"
-            "/approve <telegram_id> - одобрить заявку\n"
+            "/approve <telegram_id> - выдать admin-доступ\n"
             "/reject <telegram_id> - отклонить заявку\n"
             "/id - твой Telegram ID"
         )
@@ -71,6 +74,9 @@ async def main() -> None:
         user = await upsert_user(pool, message)
         if user["status"] != "active":
             await message.answer("Доступ к панели еще не активирован.")
+            return
+        if not await has_permission(pool, user["id"], "system.view"):
+            await message.answer("Доступ к админ-панели не выдан.")
             return
         await send_panel_button(bot, message)
 
@@ -141,7 +147,7 @@ async def main() -> None:
             username = await approve_user(connection, actor["id"], target["id"])
 
         whitelist_output = await whitelist_add(rcon, username) if username else "Minecraft ник не указан"
-        await message.answer(f"Одобрено: `{telegram_user_id}`\nWhitelist: `{whitelist_output}`", parse_mode="Markdown")
+        await message.answer(f"Выдан admin-доступ: `{telegram_user_id}`\nWhitelist: `{whitelist_output}`", parse_mode="Markdown")
 
     @dispatcher.message(Command("reject"))
     async def reject_command(message: Message) -> None:
@@ -201,30 +207,15 @@ async def has_permission(pool: asyncpg.Pool, user_id: int, permission: str) -> b
     async with pool.acquire() as connection:
         row = await connection.fetchrow(
             """
-            WITH role_based AS (
-                SELECT p.key, 'allow'::text AS effect
-                FROM mc_panel.user_roles ur
-                JOIN mc_panel.role_permissions rp ON rp.role_id = ur.role_id
-                JOIN mc_panel.permissions p ON p.id = rp.permission_id
-                WHERE ur.user_id = $1
-            ),
-            overrides AS (
-                SELECT p.key, upo.effect
-                FROM mc_panel.user_permission_overrides upo
-                JOIN mc_panel.permissions p ON p.id = upo.permission_id
-                WHERE upo.user_id = $1
-                  AND (upo.expires_at IS NULL OR upo.expires_at > now())
-            )
             SELECT EXISTS (
                 SELECT 1
-                FROM (
-                    SELECT key, effect FROM role_based
-                    UNION ALL
-                    SELECT key, effect FROM overrides
-                ) permissions
-                WHERE key = $2 AND effect = 'allow'
-            ) AND NOT EXISTS (
-                SELECT 1 FROM overrides WHERE key = $2 AND effect = 'deny'
+                FROM mc_panel.user_roles ur
+                JOIN mc_panel.roles r ON r.id = ur.role_id
+                WHERE ur.user_id = $1 AND r.key = 'admin'
+            ) AND EXISTS (
+                SELECT 1
+                FROM mc_panel.permissions
+                WHERE key = $2
             ) AS allowed
             """,
             user_id,
@@ -289,14 +280,14 @@ async def send_panel_button(bot: Bot, message: Message) -> None:
     web_app = WebAppInfo(url=str(settings.web_app_url))
     await bot.set_chat_menu_button(
         chat_id=message.chat.id,
-        menu_button=MenuButtonWebApp(text="Minecraft Panel", web_app=web_app),
+        menu_button=MenuButtonWebApp(text="Minecraft Ops", web_app=web_app),
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Открыть панель", web_app=web_app)],
+            [InlineKeyboardButton(text="Открыть админ-панель", web_app=web_app)],
         ]
     )
-    await message.answer("Панель готова.", reply_markup=keyboard)
+    await message.answer("Админ-панель готова.", reply_markup=keyboard)
 
 
 if __name__ == "__main__":

@@ -93,6 +93,8 @@ def require_permission(permission: str):
     async def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if current_user.status != "active":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access is pending approval")
+        if "admin" not in current_user.roles:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin access required")
         if permission not in current_user.permissions:
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"Missing permission: {permission}")
         return current_user

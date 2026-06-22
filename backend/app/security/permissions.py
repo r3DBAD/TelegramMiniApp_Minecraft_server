@@ -19,6 +19,21 @@ class CurrentUser:
 
 
 async def load_effective_permissions(connection: asyncpg.Connection, user_id: int) -> frozenset[str]:
+    is_admin = await connection.fetchval(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM mc_panel.user_roles ur
+            JOIN mc_panel.roles r ON r.id = ur.role_id
+            WHERE ur.user_id = $1 AND r.key = 'admin'
+        )
+        """,
+        user_id,
+    )
+    if is_admin:
+        rows = await connection.fetch("SELECT key FROM mc_panel.permissions")
+        return frozenset(row["key"] for row in rows)
+
     rows = await connection.fetch(
         """
         WITH role_based AS (

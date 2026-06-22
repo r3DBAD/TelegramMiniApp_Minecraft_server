@@ -96,3 +96,14 @@ export type WhitelistResponse = {
   raw: string;
   file: WhitelistEntry[];
 };
+
+export type OpsEntry = {
+  name?: string;
+  uuid?: string;
+  level?: number;
+  bypassesPlayerLimit?: boolean;
+};
+
+export type OpsResponse = {
+  ops: OpsEntry[];
+};

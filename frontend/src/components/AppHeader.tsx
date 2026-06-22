@@ -19,8 +19,8 @@ export function AppHeader({ me, status, busy, onRefresh }: AppHeaderProps) {
           <Server size={18} />
         </div>
         <div>
-          <p>Community Server</p>
-          <h1>Minecraft Panel</h1>
+          <p>Admin Console</p>
+          <h1>Minecraft Ops</h1>
         </div>
       </div>
 
@@ -35,7 +35,7 @@ export function AppHeader({ me, status, busy, onRefresh }: AppHeaderProps) {
       </div>
 
       <div className="identity-line">
-        <span>{me?.user.minecraftUsername || "Ник не привязан"}</span>
+        <span>{me?.user.firstName || me?.user.username || "Администратор"}</span>
         <span>
           <Shield size={14} /> {role}
         </span>

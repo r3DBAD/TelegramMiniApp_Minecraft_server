@@ -56,7 +56,7 @@ async def load_access_request_recipients(pool: asyncpg.Pool, requester_telegram_
             JOIN mc_panel.roles r ON r.id = ur.role_id
             WHERE u.status = 'active'
               AND u.telegram_user_id <> $1
-              AND r.key IN ('owner', 'admin')
+              AND r.key = 'admin'
             """,
             requester_telegram_id,
         )

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "../lib/api";
-import type { AccessRequestItem, AuditEvent, CommandDef, MeResponse, PermissionDef, ServerStatus, UserListItem, WhitelistResponse } from "../lib/types";
+import type { AccessRequestItem, AuditEvent, CommandDef, MeResponse, OpsResponse, PermissionDef, ServerStatus, UserListItem, WhitelistResponse } from "../lib/types";
 
 export function usePanelData(enabled: boolean) {
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -12,6 +12,7 @@ export function usePanelData(enabled: boolean) {
   const [accessRequests, setAccessRequests] = useState<AccessRequestItem[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [whitelist, setWhitelist] = useState<WhitelistResponse | null>(null);
+  const [ops, setOps] = useState<OpsResponse | null>(null);
   const [busy, setBusy] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
   const [output, setOutput] = useState("");
@@ -36,10 +37,11 @@ export function usePanelData(enabled: boolean) {
         setAccessRequests([]);
         setAuditEvents([]);
         setWhitelist(null);
+        setOps(null);
         return;
       }
 
-      const [serverStatus, commandCatalog, userList, catalog, requests, auditLog, whitelistData] = await Promise.all([
+      const [serverStatus, commandCatalog, userList, catalog, requests, auditLog, whitelistData, opsData] = await Promise.all([
         api<ServerStatus>("/server/status"),
         api<{ commands: CommandDef[] }>("/commands"),
         profile.permissions.includes("users.manage")
@@ -56,6 +58,9 @@ export function usePanelData(enabled: boolean) {
           : Promise.resolve({ events: [] }),
         profile.permissions.includes("minecraft.whitelist.read")
           ? api<WhitelistResponse>("/server/whitelist")
+          : Promise.resolve(null),
+        profile.permissions.includes("minecraft.ops.read")
+          ? api<OpsResponse>("/server/ops")
           : Promise.resolve(null)
       ]);
 
@@ -66,6 +71,7 @@ export function usePanelData(enabled: boolean) {
       setAccessRequests(requests.requests);
       setAuditEvents(auditLog.events);
       setWhitelist(whitelistData);
+      setOps(opsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка запроса");
     } finally {
@@ -91,6 +97,7 @@ export function usePanelData(enabled: boolean) {
     accessRequests,
     auditEvents,
     whitelist,
+    ops,
     busy,
     error,
     output,

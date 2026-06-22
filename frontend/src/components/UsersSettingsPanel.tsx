@@ -32,7 +32,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../lib/api";
 import { auditActionLabel, permissionLabel, riskLabels, sameMinecraftName, statusLabel, userLabel } from "../lib/panel";
-import type { AccessRequestItem, AuditEvent, PermissionDef, UserListItem, UserPermissionState, WhitelistResponse } from "../lib/types";
+import type { AccessRequestItem, AuditEvent, OpsResponse, PermissionDef, UserListItem, UserPermissionState, WhitelistResponse } from "../lib/types";
 
 type UsersSettingsPanelProps = {
   users: UserListItem[];
@@ -40,6 +40,7 @@ type UsersSettingsPanelProps = {
   accessRequests: AccessRequestItem[];
   auditEvents: AuditEvent[];
   whitelist: WhitelistResponse | null;
+  ops: OpsResponse | null;
   currentUserId?: number;
   canManageRoles: boolean;
   canManageWhitelist: boolean;
@@ -54,6 +55,7 @@ export function UsersSettingsPanel({
   accessRequests,
   auditEvents,
   whitelist,
+  ops,
   currentUserId,
   canManageRoles,
   canManageWhitelist,
@@ -62,20 +64,18 @@ export function UsersSettingsPanel({
   reload
 }: UsersSettingsPanelProps) {
   const [minecraftNames, setMinecraftNames] = useState<Record<number, string>>({});
-  const [permissionState, setPermissionState] = useState<Record<number, UserPermissionState[]>>({});
-  const [permissionBusy, setPermissionBusy] = useState(false);
-  const [permissionReloadToken, setPermissionReloadToken] = useState(0);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(users[0]?.id ?? null);
   const visibleUsers = useMemo(
     () =>
       users
-        .filter((user) => user.status !== "blocked")
-        .sort((left, right) => Number(right.status === "pending") - Number(left.status === "pending")),
+        .sort((left, right) => accessSortScore(right.status) - accessSortScore(left.status)),
     [users]
   );
   const selectedUser = visibleUsers.find((user) => user.id === selectedUserId) || visibleUsers[0];
   const pendingCount = accessRequests.length || visibleUsers.filter((user) => user.status === "pending").length;
   const activeCount = visibleUsers.filter((user) => user.status === "active").length;
+  const blockedCount = visibleUsers.filter((user) => user.status === "blocked").length;
+  const operatorCount = ops?.ops.length || 0;
 
   useEffect(() => {
     if (!visibleUsers.length) {
@@ -88,65 +88,12 @@ export function UsersSettingsPanel({
     }
   }, [selectedUserId, visibleUsers]);
 
-  useEffect(() => {
-    if (!selectedUser || !canManageRoles) return;
-
-    let cancelled = false;
-    setPermissionBusy(true);
-    api<{ permissions: UserPermissionState[] }>(`/users/${selectedUser.id}/permissions/effective`)
-      .then((result) => {
-        if (!cancelled) {
-          setPermissionState((current) => ({ ...current, [selectedUser.id]: result.permissions }));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPermissionState((current) => ({ ...current, [selectedUser.id]: [] }));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setPermissionBusy(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [canManageRoles, permissionReloadToken, selectedUser]);
-
-  function refreshPermissionState() {
-    setPermissionReloadToken((value) => value + 1);
-  }
-
   async function setStatus(user: UserListItem, status: string) {
     await api(`/users/${user.id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status })
     });
     await reload();
-  }
-
-  async function grantRole(user: UserListItem, roleKey: string) {
-    await api(`/users/${user.id}/roles`, {
-      method: "POST",
-      body: JSON.stringify({ roleKey })
-    });
-    await reload();
-    refreshPermissionState();
-  }
-
-  async function revokeRole(user: UserListItem, roleKey: string) {
-    await api(`/users/${user.id}/roles/${roleKey}`, { method: "DELETE" });
-    await reload();
-    refreshPermissionState();
-  }
-
-  async function setPermission(user: UserListItem, permissionKey: string, effect: "allow" | "deny") {
-    await api(`/users/${user.id}/permissions`, {
-      method: "PUT",
-      body: JSON.stringify({ permissionKey, effect, reason: "Mini App override" })
-    });
-    await reload();
-    refreshPermissionState();
   }
 
   async function setMinecraftProfile(user: UserListItem) {
@@ -169,13 +116,13 @@ export function UsersSettingsPanel({
     <motion.section className="user-list" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
       <div className="section-head">
         <div>
-          <p className="eyebrow">Players</p>
+          <p className="eyebrow">Admin access</p>
           <h2>
-            <UserCog size={18} /> Игроки
+            <UserCog size={18} /> Доступ и доверенные игроки
           </h2>
         </div>
         <span>
-          {activeCount} активных · {pendingCount} заявок
+          {activeCount} можно · {blockedCount} нельзя · {pendingCount} заявок
         </span>
       </div>
 
@@ -186,8 +133,10 @@ export function UsersSettingsPanel({
           <aside className="access-overview" aria-label="Пользователи">
             <div className="settings-stats">
               <span>{pendingCount} заявок</span>
-              <span>{activeCount} активных</span>
+              <span>{activeCount} можно</span>
+              <span>{blockedCount} нельзя</span>
               <span>{onlinePlayers.length} онлайн</span>
+              <span>{operatorCount} ops</span>
             </div>
             <div className="user-choice-list">
               {visibleUsers.map((user) => (
@@ -210,11 +159,7 @@ export function UsersSettingsPanel({
           {selectedUser && (
             <SelectedUserSettings
               user={selectedUser}
-              permissions={permissionState[selectedUser.id] || []}
-              permissionsFallback={permissions}
-              permissionsBusy={permissionBusy}
               currentUserId={currentUserId}
-              canManageRoles={canManageRoles}
               onlinePlayers={onlinePlayers}
               minecraftName={
                 minecraftNames[selectedUser.id] ??
@@ -224,18 +169,64 @@ export function UsersSettingsPanel({
               }
               setMinecraftName={(value) => setMinecraftNames((current) => ({ ...current, [selectedUser.id]: value }))}
               setStatus={setStatus}
-              grantRole={grantRole}
-              revokeRole={revokeRole}
-              setPermission={setPermission}
               setMinecraftProfile={setMinecraftProfile}
             />
           )}
         </div>
 
+        <OpsManager ops={ops} />
         <WhitelistManager whitelist={whitelist} canManageWhitelist={canManageWhitelist} reload={reload} />
         {canReadAudit && <AuditLog events={auditEvents} />}
       </div>
     </motion.section>
+  );
+}
+
+function accessSortScore(status: string): number {
+  if (status === "pending") return 3;
+  if (status === "active") return 2;
+  if (status === "blocked") return 1;
+  return 0;
+}
+
+function OpsManager({ ops }: { ops: OpsResponse | null }) {
+  if (!ops) return null;
+
+  return (
+    <section className="manager-section ops-section">
+      <div className="manager-head">
+        <div>
+          <p className="eyebrow">Minecraft ops</p>
+          <h3>
+            <Crown size={17} /> Операторы сервера
+          </h3>
+        </div>
+        <span>{ops.ops.length}</span>
+      </div>
+      <p className="manager-note">
+        Operator-статус дает права внутри Minecraft. Держи здесь только owner/admin; выдача и снятие доступны через RCON-команды op/deop.
+      </p>
+      <div className="ops-list">
+        {ops.ops.map((entry) => (
+          <article className="ops-card" key={entry.uuid || entry.name}>
+            <div className="whitelist-player">
+              {entry.name ? <img src={minecraftHead(entry.name, 40)} alt="" loading="lazy" /> : <Crown size={18} />}
+              <div>
+                <strong>{entry.name || entry.uuid}</strong>
+                <span>level {entry.level ?? "?"}{entry.bypassesPlayerLimit ? " · bypass limit" : ""}</span>
+              </div>
+            </div>
+            <span className="ops-risk">critical</span>
+          </article>
+        ))}
+        {ops.ops.length === 0 && (
+          <div className="empty-inline empty-soft">
+            <IconInbox size={22} />
+            <span>ops.json пуст</span>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -303,35 +294,21 @@ function AccessRequestInbox({ requests, users, setStatus }: AccessRequestInboxPr
 
 type SelectedUserSettingsProps = {
   user: UserListItem;
-  permissions: UserPermissionState[];
-  permissionsFallback: PermissionDef[];
-  permissionsBusy: boolean;
   currentUserId?: number;
-  canManageRoles: boolean;
   onlinePlayers: string[];
   minecraftName: string;
   setMinecraftName: (value: string) => void;
   setStatus: (user: UserListItem, status: string) => Promise<void>;
-  grantRole: (user: UserListItem, roleKey: string) => Promise<void>;
-  revokeRole: (user: UserListItem, roleKey: string) => Promise<void>;
-  setPermission: (user: UserListItem, permissionKey: string, effect: "allow" | "deny") => Promise<void>;
   setMinecraftProfile: (user: UserListItem) => Promise<void>;
 };
 
 function SelectedUserSettings({
   user,
-  permissions,
-  permissionsFallback,
-  permissionsBusy,
   currentUserId,
-  canManageRoles,
   onlinePlayers,
   minecraftName,
   setMinecraftName,
   setStatus,
-  grantRole,
-  revokeRole,
-  setPermission,
   setMinecraftProfile
 }: SelectedUserSettingsProps) {
   const isOnline = Boolean(
@@ -340,27 +317,13 @@ function SelectedUserSettings({
   const name = userLabel(user);
   const avatarName = user.minecraft_username || user.requested_minecraft_username || name;
   const isSelf = user.id === currentUserId;
-  const isOwner = user.roles.includes("owner");
-  const protectedSelf = isSelf && isOwner;
+  const protectedSelf = isSelf && user.status === "active";
+  const allowed = user.status === "active";
 
   async function updateStatus(nextStatus: string) {
     if (protectedSelf && nextStatus !== "active") return;
     if (nextStatus === "blocked" && !confirm(`Отклонить доступ для ${name}?`)) return;
     await setStatus(user, nextStatus);
-  }
-
-  async function setPrimaryRole(roleKey: string | null) {
-    if (!roleKey || protectedSelf) return;
-    if (!user.roles.includes(roleKey)) {
-      await grantRole(user, roleKey);
-    }
-    await Promise.all(roleOptions.filter((role) => role.key !== roleKey && user.roles.includes(role.key)).map((role) => revokeRole(user, role.key)));
-  }
-
-  async function updatePermission(permissionKey: string, effect: "allow" | "deny") {
-    if (protectedSelf) return;
-    if (effect === "deny" && !confirm(`Запретить право "${permissionLabel(permissionKey)}" для ${name}?`)) return;
-    await setPermission(user, permissionKey, effect);
   }
 
   return (
@@ -378,7 +341,7 @@ function SelectedUserSettings({
             <h2>{name}</h2>
             <div className="user-badges">
               <span className={`status-dot ${user.status}`}>{statusLabel(user.status)}</span>
-              {user.roles.length > 0 ? user.roles.map((role) => <span className={`role-badge ${role}`} key={role}>{role}</span>) : <span>no role</span>}
+              {allowed ? <span className="role-badge admin">admin</span> : <span>no access</span>}
             </div>
           </div>
         </div>
@@ -424,13 +387,13 @@ function SelectedUserSettings({
           </div>
           {protectedSelf && (
             <p className="guard-note">
-              <LockKeyhole size={15} /> Это твой owner-профиль. Самому себе нельзя забирать доступ, роли и права.
+              <LockKeyhole size={15} /> Это твой admin-профиль. Самому себе нельзя забирать доступ.
             </p>
           )}
           <div className="settings-row">
-            <span>Доступ разрешён</span>
+            <span>{allowed ? "Можно: полный доступ" : "Нельзя: доступа нет"}</span>
             <Switch
-              checked={user.status === "active"}
+              checked={allowed}
               disabled={protectedSelf}
               color="green"
               onChange={(event) => updateStatus(event.currentTarget.checked ? "active" : "blocked")}
@@ -438,38 +401,16 @@ function SelectedUserSettings({
           </div>
         </section>
 
-        {canManageRoles && (
-          <>
-            <section className="settings-block">
-              <div className="settings-block-title">
-                <Crown size={16} />
-                Роль
-              </div>
-              <Select
-                className={`role-select role-${primaryRole(user.roles)}`}
-                value={primaryRole(user.roles)}
-                disabled={protectedSelf}
-                data={roleOptions.map((role) => ({ value: role.key, label: role.label }))}
-                onChange={setPrimaryRole}
-              />
-            </section>
-
-            <section className="settings-block wide-field">
-              <div className="settings-block-title">
-                <UserCog size={16} />
-                Права
-              </div>
-              <PermissionMatrix
-                permissions={permissions}
-                fallback={permissionsFallback}
-                busy={permissionsBusy}
-                disabled={protectedSelf}
-                onAllow={(permissionKey) => updatePermission(permissionKey, "allow")}
-                onDeny={(permissionKey) => updatePermission(permissionKey, "deny")}
-              />
-            </section>
-          </>
-        )}
+        <section className="settings-block">
+          <div className="settings-block-title">
+            <Crown size={16} />
+            Единая роль
+          </div>
+          <div className={allowed ? "single-role-card enabled" : "single-role-card"}>
+            <strong>{allowed ? "admin" : "нет роли"}</strong>
+            <span>{allowed ? "Полный доступ к интерфейсу, RCON, whitelist, ops и журналу." : "Пользователь не может открыть панель и выполнять функции."}</span>
+          </div>
+        </section>
       </div>
     </article>
   );

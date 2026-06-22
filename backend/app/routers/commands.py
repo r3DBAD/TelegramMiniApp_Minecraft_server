@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.db import get_pool
-from app.security.dependencies import get_current_user, require_permission
+from app.security.dependencies import require_permission
 from app.security.permissions import CurrentUser
 from app.services.commands import render_command
 from app.services.rcon import RconError
@@ -61,11 +61,8 @@ async def execute_command(
     body: ExecuteCommandBody,
     request: Request,
     pool: asyncpg.Pool = Depends(get_pool),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("system.view")),
 ) -> dict:
-    if current_user.status != "active":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access is pending approval")
-
     async with pool.acquire() as connection:
         row = await connection.fetchrow(
             """

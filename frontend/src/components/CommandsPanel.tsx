@@ -42,6 +42,8 @@ type HistoryItem = {
   time: string;
 };
 
+const diagnosticCommandKeys = ["diagnostics.spark", "diagnostics.mspt", "diagnostics.tps", "plugins.list", "paper.chunkinfo"];
+
 export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPanelProps) {
   const [values, setValues] = useState<CommandValues>({});
   const [running, setRunning] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
   const [pendingCommand, setPendingCommand] = useState<CommandDef | null>(null);
   const deferredQuery = useDeferredValue(query);
   const available = commands.filter((command) => command.allowed).length;
+  const diagnosticCommands = commands.filter((command) => command.allowed && diagnosticCommandKeys.includes(command.key));
   const filteredCommands = useMemo(
     () =>
       commands.filter((command) => {
@@ -138,12 +141,31 @@ export function CommandsPanel({ commands, onlinePlayers, onOutput }: CommandsPan
       <Card className="glass-card section-card">
         <Group justify="space-between">
           <Stack gap={2}>
-            <Text className="eyebrow">RCON allowlist</Text>
-            <Title order={2}>Команды</Title>
+            <Text className="eyebrow">RCON operator console</Text>
+            <Title order={2}>Админ-команды</Title>
           </Stack>
           <Badge className="neon-badge">{available}/{commands.length}</Badge>
         </Group>
       </Card>
+
+      {diagnosticCommands.length > 0 && (
+        <Card className="glass-card diagnostics-card">
+          <Group justify="space-between" mb="sm">
+            <Stack gap={2}>
+              <Text className="eyebrow">Diagnostics first</Text>
+              <Title order={3}>Проверка лагов и плагинов</Title>
+            </Stack>
+            <IconGauge size={18} />
+          </Group>
+          <Group gap="xs">
+            {diagnosticCommands.map((command) => (
+              <Button variant="light" radius="xl" key={command.key} onClick={() => execute(command)}>
+                {command.title}
+              </Button>
+            ))}
+          </Group>
+        </Card>
+      )}
 
       <Card className="glass-card command-toolbar">
         <TextInput

@@ -21,7 +21,8 @@ export default function App() {
   const [tab, setTab] = useState<PanelTab>("overview");
   const [toast, setToast] = useState<ToastState | null>(null);
   const hasAuth = hasTelegramInitData();
-  const { me, status, commands, users, permissionCatalog, accessRequests, auditEvents, whitelist, busy, error, output, setOutput, can, load } = usePanelData(hasAuth);
+  const { me, status, commands, users, permissionCatalog, accessRequests, auditEvents, whitelist, ops, busy, error, output, setOutput, can, load } = usePanelData(hasAuth);
+  const hasAdminAccess = Boolean(me?.roles.includes("admin"));
 
   function notify(text: string, tone: ToastState["tone"] = "info") {
     const isError = tone === "danger" || /ошибка|error|unavailable|denied|forbidden/i.test(text);
@@ -69,6 +70,14 @@ export default function App() {
     );
   }
 
+  if (me?.user.status === "active" && !hasAdminAccess) {
+    return (
+      <EmptyState icon={<Shield size={42} />} title="Только для администраторов">
+        <p>Эта панель открывается только пользователям с единственной ролью admin.</p>
+      </EmptyState>
+    );
+  }
+
   return (
     <main className="shell">
       <AppHeader me={me} status={status} busy={busy} onRefresh={load} />
@@ -79,7 +88,7 @@ export default function App() {
       <PanelTabs tab={tab} canManageUsers={can.has("users.manage")} onChange={setTab} />
 
       {tab === "overview" && (
-        <OverviewPanel me={me} status={status} commands={commands} output={output} onOutput={handleOutput} />
+        <OverviewPanel status={status} commands={commands} ops={ops} auditEvents={auditEvents} output={output} onOutput={handleOutput} />
       )}
 
       {tab === "commands" && (
@@ -93,6 +102,7 @@ export default function App() {
           accessRequests={accessRequests}
           auditEvents={auditEvents}
           whitelist={whitelist}
+          ops={ops}
           currentUserId={me?.user.id}
           canManageRoles={can.has("roles.manage")}
           canManageWhitelist={can.has("minecraft.whitelist.write")}
